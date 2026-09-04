@@ -1,0 +1,33 @@
+# Package defaults (lowest precedence layer, Section 8.1).
+#
+# This is the Phase 0A subset of the full default.yaml shown in 01_SPEC.md Section 8.3.
+# `objective`, `constraints`, `schedules`, `collateral`, `elasticity`, and `scenarios` sections
+# are added when their owning subsystems land; until then InventoryOptimizerConfig rejects them.
+
+desk:
+  problem_family: securities_lending_inventory
+  enabled_components: []
+
+formulation:
+  mode: lp
+  planning_horizon_days: 1
+  day_count_basis: act_360
+  quantity_type: continuous
+  scaling: false
+
+validation:
+  balance_tolerance_shares: 1.0e-6
+  max_staleness_hours: 24.0
+  duplicate_id_policy: reject
+
+solver:
+  backend: highs
+  time_limit_seconds: null
+  relative_gap: null
+  threads: null
+  seed: null
+  log_level: warning
+
+observability:
+  run_id_prefix: inv-opt
+  audit_enabled: false

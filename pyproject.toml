@@ -1,0 +1,57 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "inventory-optimizer"
+version = "0.1.0"
+description = "Portable, solver-neutral securities-lending inventory optimization engine (Spec002)."
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [
+  { name = "Joshua Lutkemuller" }
+]
+dependencies = [
+  "pydantic>=2.7",
+  "numpy>=1.26",
+  "scipy>=1.13",
+  "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+highs = [
+  "highspy>=1.7",
+]
+dataframe = [
+  "pandas>=2.2",
+]
+dev = [
+  "pytest>=8.2",
+  "hypothesis>=6.100",
+  "ruff>=0.5",
+  "mypy>=1.10",
+  "types-PyYAML>=6.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/inventory_optimizer"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.mypy]
+python_version = "3.11"
+packages = ["inventory_optimizer"]
+strict = true
+
+[[tool.mypy.overrides]]
+module = ["highspy", "highspy.*", "scipy", "scipy.*"]
+ignore_missing_imports = true
