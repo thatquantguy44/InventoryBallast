@@ -13,6 +13,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from inventory_optimizer.domain.enums import Capability, SolverStatus
+from inventory_optimizer.formulation.compiled import CompiledProblem
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,15 +58,14 @@ class SolverResult:
 
 @runtime_checkable
 class SolverBackend(Protocol):
-    """Section 16.2. ``problem``/``CompiledProblem`` is introduced with the formulation layer
-    (T07-T08)."""
+    """Section 16.2."""
 
     @property
     def capabilities(self) -> frozenset[Capability]: ...
 
     def solve(
         self,
-        problem: object,
+        problem: CompiledProblem,
         options: SolverOptions,
         warm_start: SolverWarmStart | None = None,
     ) -> SolverResult: ...

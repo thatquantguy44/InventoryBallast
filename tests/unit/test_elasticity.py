@@ -1,4 +1,7 @@
-"""Elasticity service (T06; Section 12), golden-checked against EXAMPLES.md E2."""
+"""Elasticity service (T06; Section 12) unit behavior.
+
+The E2 golden check lives in ``tests/golden/test_e2_fee_elasticity_shock.py``.
+"""
 
 from __future__ import annotations
 
@@ -7,24 +10,8 @@ import math
 import pytest
 
 from inventory_optimizer.config.models import ElasticityConfig
-from inventory_optimizer.domain.enums import ElasticityCurveType, ReasonCode
+from inventory_optimizer.domain.enums import ElasticityCurveType
 from inventory_optimizer.elasticity import evaluate_demand_cap
-
-
-def test_constant_curve_matches_e2_golden_value(demand_factory) -> None:
-    # EXAMPLES.md E2: Q_ref=80, F_ref=0.02, f_scenario=0.03, epsilon=0.5 -> D=65.3197264742.
-    forecast = demand_factory(
-        "DG-E2",
-        "BORROWER-E2",
-        fee_rate=0.02,
-        reference_quantity_shares=80.0,
-        elasticity=0.5,
-    )
-    result = evaluate_demand_cap(forecast, 0.03, config=ElasticityConfig())
-
-    assert result.raw_demand_shares == pytest.approx(65.3197264742, rel=1e-9)
-    assert result.effective_cap_shares == pytest.approx(65.3197264742, rel=1e-9)
-    assert result.reason_code is ReasonCode.ELASTICITY_REDUCED_DEMAND
 
 
 def test_zero_elasticity_is_price_insensitive(demand_factory) -> None:
