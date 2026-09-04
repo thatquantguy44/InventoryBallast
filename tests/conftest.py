@@ -1,18 +1,19 @@
 """Shared fixtures for inventory_optimizer tests.
 
-``e1_inputs`` builds the E1 "Scarce-Name Allocation" fixture from ``specs/spec002/EXAMPLES.md``:
+``e1_request`` builds the E1 "Scarce-Name Allocation" fixture from ``specs/spec002/EXAMPLES.md``:
 100 lendable shares, no reserve/committed, a 90% utilization cap, and two candidate routes (A at
-2.00% fee, B at 1.00% fee) each demanding up to 80 shares. Phase 0A only exercises the contract and
-validation layers; the LP itself (Phase 1, T08-T09) is what actually produces E1's expected
-allocation of ``q_A=80, q_B=10``.
+2.00% fee, B at 1.00% fee) each demanding up to 80 shares. ``tests/golden/`` compiles it through
+``formulation.lp.compile_lp`` and checks the exact allocation.
 """
 
 from __future__ import annotations
 
 from datetime import UTC, date, datetime
+from pathlib import Path
 
 import pytest
 
+from inventory_optimizer.config import InventoryOptimizerConfig, build_config, load_yaml_file
 from inventory_optimizer.domain.demand import DemandForecast
 from inventory_optimizer.domain.inventory import SecurityInventory
 from inventory_optimizer.domain.loans import LoanRoute
@@ -21,6 +22,7 @@ from inventory_optimizer.domain.requests import OptimizationRequest
 
 AS_OF = datetime(2026, 9, 3, 12, 0, tzinfo=UTC)
 EFFECTIVE_DATE = date(2026, 9, 3)
+DEFAULT_YAML_PATH = Path(__file__).resolve().parents[1] / "configs" / "default.yaml"
 
 
 def make_inventory(**overrides: object) -> SecurityInventory:
@@ -127,3 +129,8 @@ def e1_request() -> OptimizationRequest:
         demand=(demand_a, demand_b),
         utilization_policies=(utilization,),
     )
+
+
+@pytest.fixture
+def default_config() -> InventoryOptimizerConfig:
+    return build_config(defaults=load_yaml_file(DEFAULT_YAML_PATH))
