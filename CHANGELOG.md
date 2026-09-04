@@ -34,3 +34,11 @@
   solves through the real adapter to the exact expected allocation and objective.
 
 `highspy` is installed in this environment as of this entry (was previously documented as a gap).
+
+- T10: independent solution verifier (`validation/solution_verifier.py::verify_solution`,
+  requirement VER-001). Recomputes variable-bound, row, and integrality violations plus the
+  objective directly from `CompiledProblem` and a `SolverResult` -- deliberately independent of
+  `result.status`, so a `FEASIBLE_LIMIT` result with a valid primal still passes. Covered by
+  corrupted-solution tests (`tests/unit/test_solution_verifier.py`): each of bound violation, row
+  violation, integrality violation, and falsified objective is injected into a real solved E1
+  result one at a time and confirmed caught.

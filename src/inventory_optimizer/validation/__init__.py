@@ -15,6 +15,11 @@ from inventory_optimizer.validation.input_validation import (
     check_freshness,
 )
 from inventory_optimizer.validation.reconciliation import reconcile
+from inventory_optimizer.validation.solution_verifier import (
+    DEFAULT_TOLERANCE,
+    VerificationReport,
+    verify_solution,
+)
 
 
 def validate_request(
@@ -37,8 +42,11 @@ def raise_if_invalid(
 
 
 __all__ = [
+    "DEFAULT_TOLERANCE",
     "InputValidationError",
     "ValidationIssue",
+    "VerificationReport",
     "raise_if_invalid",
     "validate_request",
+    "verify_solution",
 ]
