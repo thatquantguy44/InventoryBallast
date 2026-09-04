@@ -165,6 +165,33 @@ def check_demand_group_consistency(request: OptimizationRequest) -> tuple[Valida
     return tuple(issues)
 
 
+def check_demand_group_fee_consistency(request: OptimizationRequest) -> tuple[ValidationIssue, ...]:
+    """Section 12.2: "All routes in one LP demand group must share the evaluated borrower fee ...
+    If route rates imply genuinely different borrower price choices, use distinct demand groups or
+    the discrete pricing MIP." Routes sharing a ``demand_group_id`` must therefore share a
+    ``fee_rate``; lender ``revenue_share`` may still differ."""
+    issues: list[ValidationIssue] = []
+    fee_by_group: dict[str, tuple[int, float]] = {}
+    for idx, route in enumerate(request.routes):
+        first = fee_by_group.get(route.demand_group_id)
+        if first is None:
+            fee_by_group[route.demand_group_id] = (idx, route.fee_rate)
+        elif abs(first[1] - route.fee_rate) > BALANCE_TOLERANCE_SHARES:
+            issues.append(
+                ValidationIssue(
+                    code="DEMAND_GROUP_FEE_INCONSISTENT",
+                    message=(
+                        f"route.fee_rate {route.fee_rate!r} differs from routes[{first[0]}]."
+                        f"fee_rate {first[1]!r} in the same demand group "
+                        f"{route.demand_group_id!r}; use distinct demand groups or the discrete "
+                        "pricing MIP for genuinely different borrower prices"
+                    ),
+                    location=f"routes[{idx}].fee_rate",
+                )
+            )
+    return tuple(issues)
+
+
 def reconcile(request: OptimizationRequest) -> tuple[ValidationIssue, ...]:
     """Run every reconciliation check and aggregate issues."""
     return (
@@ -173,4 +200,5 @@ def reconcile(request: OptimizationRequest) -> tuple[ValidationIssue, ...]:
         + check_on_loan_reconciliation(request)
         + check_term_and_recall_timing(request)
         + check_demand_group_consistency(request)
+        + check_demand_group_fee_consistency(request)
     )

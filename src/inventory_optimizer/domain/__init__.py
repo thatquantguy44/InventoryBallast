@@ -16,6 +16,7 @@ from inventory_optimizer.domain.demand import DemandForecast
 from inventory_optimizer.domain.enums import (
     Capability,
     DayCountBasis,
+    ElasticityCurveType,
     Formulation,
     ObjectiveSense,
     ProblemFamily,
@@ -35,6 +36,7 @@ __all__ = [
     "DayCountBasis",
     "DemandForecast",
     "DeskContext",
+    "ElasticityCurveType",
     "Formulation",
     "LoanRoute",
     "ObjectiveSense",

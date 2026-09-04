@@ -1,4 +1,5 @@
-"""Cross-record validation (Section 9.8 invariants 1, 2, 6, 8, 9, 10) and aggregation behavior."""
+"""Cross-record validation (Section 9.8 invariants 1, 2, 6, 8, 9, 10; Section 12.2 fee
+consistency) and aggregation behavior."""
 
 from __future__ import annotations
 
@@ -74,3 +75,20 @@ def test_stale_inventory_as_of_is_reported(e1_request: OptimizationRequest) -> N
 
     issues = validate_request(broken_request, max_staleness_hours=24.0)
     assert any(issue.code == "STALE_OR_FUTURE_AS_OF" for issue in issues)
+
+
+def test_demand_group_fee_inconsistency_is_reported(
+    e1_request: OptimizationRequest, route_factory
+) -> None:
+    # Section 12.2: routes sharing a demand group must share one evaluated fee. A second route on
+    # DG-A at a different fee_rate implies a different borrower price choice, which the spec says
+    # requires a distinct demand group or the discrete pricing MIP -- not a single LP demand cap.
+    second_route_same_group = route_factory(
+        "RT-A2", "DG-A", fee_rate=0.05, borrower_id="BORROWER-RT-A"
+    )
+    broken_request = e1_request.model_copy(
+        update={"routes": (*e1_request.routes, second_route_same_group)}
+    )
+
+    issues = validate_request(broken_request)
+    assert any(issue.code == "DEMAND_GROUP_FEE_INCONSISTENT" for issue in issues)

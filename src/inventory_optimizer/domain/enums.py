@@ -37,6 +37,14 @@ class DayCountBasis(StrEnum):
     ACT_365 = "act_365"
 
 
+class ElasticityCurveType(StrEnum):
+    """Section 12.1. ``CONSTANT`` is the V0 default; ``SEMILOG`` is the documented optional
+    curve."""
+
+    CONSTANT = "constant"
+    SEMILOG = "semilog"
+
+
 class QuantityType(StrEnum):
     """Section 5.2: share quantities may be continuous in LP mode or integer under MIP/repair."""
 

@@ -20,6 +20,8 @@ def test_default_yaml_loads_and_validates() -> None:
     config = build_config(defaults=defaults)
     assert config.formulation.mode.value == "lp"
     assert config.solver.backend == "highs"
+    assert config.elasticity.curve.value == "constant"
+    assert config.elasticity.uncertainty_haircut_sigma == 1.0
 
 
 def test_higher_precedence_layer_overrides_lower() -> None:

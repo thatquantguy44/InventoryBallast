@@ -1,16 +1,22 @@
 """Validated, frozen configuration objects (Section 8.2 of ``01_SPEC.md``).
 
-Phase 0A implements the sections the E1 vertical uses: ``desk``, ``formulation``, ``validation``,
-``solver``, ``observability``. ``objective``, ``constraints``, ``schedules``, ``collateral``,
-``elasticity``, and ``scenarios`` are added as those subsystems land; until then, supplying them
-is rejected by ``extra="forbid"`` rather than silently ignored.
+Phase 0A implements the sections the E1/E2 vertical uses: ``desk``, ``formulation``,
+``validation``, ``solver``, ``observability``, ``elasticity``. ``objective``, ``constraints``,
+``schedules``, ``collateral``, and ``scenarios`` are added as those subsystems land; until then,
+supplying them is rejected by ``extra="forbid"`` rather than silently ignored.
 """
 
 from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from inventory_optimizer.domain.enums import DayCountBasis, Formulation, ProblemFamily, QuantityType
+from inventory_optimizer.domain.enums import (
+    DayCountBasis,
+    ElasticityCurveType,
+    Formulation,
+    ProblemFamily,
+    QuantityType,
+)
 
 
 class DeskConfig(BaseModel):
@@ -58,6 +64,21 @@ class ObservabilityConfig(BaseModel):
     audit_enabled: bool = False
 
 
+class ElasticityConfig(BaseModel):
+    """Section 8.2: "curve type, floors/caps, missing-estimate policy, uncertainty haircut."
+
+    ``missing_elasticity`` policy (Section 12.3) is not modeled here: ``DemandForecast.elasticity``
+    is a required field, so resolving a *missing* upstream estimate is an ingestion/adapter concern
+    that happens before a ``DemandForecast`` exists, not something this core config controls.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    curve: ElasticityCurveType = ElasticityCurveType.CONSTANT
+    fee_floor: float = Field(default=1e-6, gt=0.0)
+    uncertainty_haircut_sigma: float = Field(default=1.0, ge=0.0)
+
+
 class InventoryOptimizerConfig(BaseModel):
     """Section 8.2. Frozen after validation; unknown top-level or nested keys fail closed."""
 
@@ -68,3 +89,4 @@ class InventoryOptimizerConfig(BaseModel):
     validation: ValidationConfig = Field(default_factory=ValidationConfig)
     solver: SolverConfig = Field(default_factory=SolverConfig)
     observability: ObservabilityConfig = Field(default_factory=ObservabilityConfig)
+    elasticity: ElasticityConfig = Field(default_factory=ElasticityConfig)
