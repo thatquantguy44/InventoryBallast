@@ -25,3 +25,12 @@
   pending schedule-driven unwind (T29). `tests/golden/test_e1_scarce_name_allocation.py` now
   compiles the E1 fixture through `compile_lp` and solves it (via scipy's bundled HiGHS, pending
   the T09 adapter) to the exact expected allocation (`q_A=80, q_B=10, objective=0.0472222222`).
+- T09: the real HiGHS backend (`solvers/highs.py::HighsBackend`), sole owner of `highspy` imports.
+  Builds a `HighsLp` directly from `CompiledProblem`'s CSR matrix (`kRowwise` format maps straight
+  onto scipy's `indptr`/`indices`/`data`), applies the allow-listed `SolverOptions`, and normalizes
+  every `HighsModelStatus` to `SolverStatus` -- a limit status is only reported as `FEASIBLE_LIMIT`
+  when HiGHS confirms a feasible incumbent, never assumed. LP duals/reduced costs are suppressed
+  whenever any column is integer (Section 18.4: MIP shadow prices are a different thing). E1 now
+  solves through the real adapter to the exact expected allocation and objective.
+
+`highspy` is installed in this environment as of this entry (was previously documented as a gap).

@@ -53,5 +53,13 @@ packages = ["inventory_optimizer"]
 strict = true
 
 [[tool.mypy.overrides]]
-module = ["highspy", "highspy.*", "scipy", "scipy.*"]
+module = ["scipy", "scipy.*"]
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# highspy ships a stub with gaps: some constructors read as untyped without follow_imports="skip",
+# and one enum member (HighsModelStatus.kHighsInterrupt, real at runtime) is missing from it even
+# with skip -- silenced at its one use site in solvers/highs.py instead of here.
+module = ["highspy", "highspy.*"]
+ignore_missing_imports = true
+follow_imports = "skip"

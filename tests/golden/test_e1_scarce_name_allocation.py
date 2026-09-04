@@ -9,15 +9,16 @@
         0 <= q_B <= 80
         a >= 0
 
-Two checks:
+Three checks:
 
 1. A hand-built ``CompiledProblem`` through the raw T07 ``SparseBuilder`` (no request, no
    compiler) -- proves the formulation infrastructure alone can represent E1's exact shape.
-2. The real ``formulation.lp.compile_lp()`` (T08) run on the ``e1_request`` fixture and solved
-   with ``scipy.optimize.linprog`` -- proves the compiler produces E1's exact expected allocation
-   end to end. This is *not* the T09 HiGHS adapter (Section 16.4 reserves ``highspy`` for that);
-   it is scipy's own bundled HiGHS-based solver, used here only because ``highspy`` is not
-   installed in this environment. The normalized-status/verifier machinery is T09/T10.
+2. The real ``formulation.lp.compile_lp()`` (T08) solved with ``scipy.optimize.linprog`` --
+   proves the compiler is correct independent of our own solver-adapter code, since scipy's
+   bundled HiGHS binding is a different integration path from ``solvers.highs``.
+3. The same compiled problem solved through the real T09 adapter (``solvers.highs.HighsBackend``,
+   the sole owner of ``highspy`` per Section 16.4) -- proves our adapter's model construction,
+   option handling, and status mapping are correct, not just the compiler.
 """
 
 from __future__ import annotations
@@ -29,13 +30,15 @@ import pytest
 from scipy.optimize import linprog
 
 from inventory_optimizer.config.models import InventoryOptimizerConfig
-from inventory_optimizer.domain.enums import Formulation, ObjectiveSense
+from inventory_optimizer.domain.enums import Formulation, ObjectiveSense, SolverStatus
 from inventory_optimizer.domain.requests import OptimizationRequest
 from inventory_optimizer.formulation.compiled import CompiledProblem, ScalingMetadata
 from inventory_optimizer.formulation.indexes import RowKey, VariableKey
 from inventory_optimizer.formulation.lp import compile_lp
 from inventory_optimizer.formulation.sparse_builder import SparseBuilder
 from inventory_optimizer.formulation.variables import build_variable_index
+from inventory_optimizer.ports.solver import SolverOptions
+from inventory_optimizer.solvers.highs import HighsBackend
 
 
 def build_e1_compiled_problem() -> CompiledProblem:
@@ -141,3 +144,22 @@ def test_e1_compiles_and_solves_to_expected_allocation(
     assert q_b == pytest.approx(10.0)
     assert available == pytest.approx(10.0)
     assert objective == pytest.approx(0.0472222222, rel=1e-6)
+
+
+def test_e1_solves_via_highs_backend_to_expected_allocation(
+    e1_request: OptimizationRequest, default_config: InventoryOptimizerConfig
+) -> None:
+    problem = compile_lp(e1_request, default_config)
+    result = HighsBackend().solve(problem, SolverOptions())
+
+    assert result.status is SolverStatus.OPTIMAL
+    assert result.primal is not None
+    q_a = result.primal[problem.variable_index.position(VariableKey("q", "RT-A"))]
+    q_b = result.primal[problem.variable_index.position(VariableKey("q", "RT-B"))]
+    available = result.primal[problem.variable_index.position(VariableKey("a", "INV-1"))]
+
+    assert q_a == pytest.approx(80.0)
+    assert q_b == pytest.approx(10.0)
+    assert available == pytest.approx(10.0)
+    assert result.objective_value_unscaled == pytest.approx(0.0472222222, rel=1e-6)
+    assert result.backend_name == "highs"
