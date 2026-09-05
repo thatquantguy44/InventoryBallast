@@ -258,6 +258,67 @@ def test_fee_revenue_coefficient_matches_hand_formula(
     assert problem.linear_objective[position] == pytest.approx(expected)
 
 
+def test_inventory_balance_row_matches_hand_formula(
+    inventory_factory, route_factory, demand_factory, default_config: InventoryOptimizerConfig
+) -> None:
+    """Section 24 test-hardening (specs/0005-test-hardening/): InventoryBalanceConstraint had no
+    dedicated, isolated test before -- only indirect coverage via golden solves."""
+    inventory = inventory_factory(
+        total_lendable_shares=100.0,
+        reserved_shares=10.0,
+        committed_out_shares=5.0,
+        on_loan_shares=15.0,
+        available_to_lend_shares=70.0,
+    )
+    route = route_factory("RT-A", "DG-A", fee_rate=0.02, current_quantity_shares=15.0)
+    demand = demand_factory("DG-A", "BORROWER-RT-A", fee_rate=0.02)
+    request = OptimizationRequest(
+        request_id="REQ-1",
+        as_of=AS_OF,
+        effective_date=EFFECTIVE_DATE,
+        inventory=(inventory,),
+        routes=(route,),
+        demand=(demand,),
+    )
+    problem = compile_lp(request, default_config)
+    row = problem.row_index.position(RowKey("inventory_balance", "INV-1"))
+    assert problem.row_lower[row] == pytest.approx(85.0)  # 100 - 10 - 5
+    assert problem.row_upper[row] == pytest.approx(85.0)
+    q_col = problem.variable_index.position(VariableKey("q", "RT-A"))
+    a_col = problem.variable_index.position(VariableKey("a", "INV-1"))
+    assert problem.constraint_matrix[row, q_col] == pytest.approx(1.0)
+    assert problem.constraint_matrix[row, a_col] == pytest.approx(1.0)
+
+
+def test_transition_identity_row_matches_hand_formula(
+    inventory_factory, route_factory, demand_factory, default_config: InventoryOptimizerConfig
+) -> None:
+    """Section 24 test-hardening (specs/0005-test-hardening/): TransitionIdentityConstraint had no
+    dedicated, isolated test before -- only indirect coverage via golden solves."""
+    route = route_factory(
+        "RT-A", "DG-A", fee_rate=0.02, current_quantity_shares=15.0, maximum_quantity_shares=80.0
+    )
+    demand = demand_factory("DG-A", "BORROWER-RT-A", fee_rate=0.02)
+    request = OptimizationRequest(
+        request_id="REQ-1",
+        as_of=AS_OF,
+        effective_date=EFFECTIVE_DATE,
+        inventory=(inventory_factory(),),
+        routes=(route,),
+        demand=(demand,),
+    )
+    problem = compile_lp(request, default_config)
+    row = problem.row_index.position(RowKey("transition_identity", "RT-A"))
+    assert problem.row_lower[row] == pytest.approx(15.0)
+    assert problem.row_upper[row] == pytest.approx(15.0)
+    q_col = problem.variable_index.position(VariableKey("q", "RT-A"))
+    inc_col = problem.variable_index.position(VariableKey("inc", "RT-A"))
+    dec_col = problem.variable_index.position(VariableKey("dec", "RT-A"))
+    assert problem.constraint_matrix[row, q_col] == pytest.approx(1.0)
+    assert problem.constraint_matrix[row, inc_col] == pytest.approx(-1.0)
+    assert problem.constraint_matrix[row, dec_col] == pytest.approx(1.0)
+
+
 def test_transition_cost_coefficients_are_negative_on_inc_and_dec(
     inventory_factory, route_factory, demand_factory, default_config: InventoryOptimizerConfig
 ) -> None:

@@ -55,12 +55,18 @@ Per `specs/spec002/00_PLAN.md`'s status line and `TRACEABILITY.md`:
   independent solution verifier (`validation/solution_verifier.py`), T11's
   result/attribution/explainability layer (`reporting/`;
   `specs/0002-result-attribution-explainability/`), T12's public API facade + CLI
-  (`facade.py`, `services.py`, `cli.py`; `specs/0003-public-api-cli/`), and (as of
-  2026-09-05) T13-T14's scenario engine plus a basic stress-testing capability
-  (`scenarios/`, `domain/scenarios.py`, `domain/scenario_results.py`;
-  `specs/0004-scenario-engine/`). 141 tests pass (`pytest tests/ -q`, with the
-  `highs` extra installed), plus a real `pip install -e .` console script
-  (`inventory-optimizer`, now including a working `scenarios` subcommand).
+  (`facade.py`, `services.py`, `cli.py`; `specs/0003-public-api-cli/`), and T13-T14's
+  scenario engine plus a basic stress-testing capability (`scenarios/`,
+  `domain/scenarios.py`, `domain/scenario_results.py`;
+  `specs/0004-scenario-engine/`). 153 tests pass in the default `pytest tests/ -q`
+  run (with the `highs` extra installed), plus a real `pip install -e .` console
+  script (`inventory-optimizer`, including a working `scenarios` subcommand) and
+  a `slow`-marked Core-desk-scale benchmark smoke test
+  (`specs/0005-test-hardening/`) run separately.
+- **Test coverage hardened against `01_SPEC.md` §24 (2026-09-05):** an audit
+  against the normative "Testing Strategy" section found `hypothesis` (a pinned
+  dev dependency since T01) had never actually been used; `specs/0005-test-
+  hardening/` closes that and four other real gaps — see its entry below.
 - **Not yet started:** Phase 3 (MIP business rules) — see "Next priorities" below.
 
 ## Environment
@@ -68,8 +74,9 @@ Per `specs/spec002/00_PLAN.md`'s status line and `TRACEABILITY.md`:
 ```bash
 python3 -m venv .venv
 .venv/bin/python -m pip install -e ".[dev,highs,dataframe,agentic]"
-.venv/bin/python -m pytest tests/ -q   # 141 passed, as of this writing
-inventory-optimizer doctor              # sanity-check the installed console script
+.venv/bin/python -m pytest tests/ -q         # 153 passed, as of this writing (fast; excludes `slow`)
+.venv/bin/python -m pytest tests/ -m slow -q # the Core desk benchmark smoke test (~1-2s)
+inventory-optimizer doctor                    # sanity-check the installed console script
 ```
 
 See `README.md`'s "Development" section for the extras breakdown. `.venv/` is
@@ -179,6 +186,47 @@ explicitly rather than hiding it. (2) `schedule_overlays`, `collateral_shocks`,
 `SPECIFIED` (tagged `T40`); the rest wait on T29/T30-T32/T35-T39 or a real
 worked example to pin their shape down.
 
+### Test hardening against `01_SPEC.md` §24 — done (2026-09-05)
+
+`specs/0005-test-hardening/` (`spec.md`, `plan.md`, `tasks.md`) — prompted by
+a direct question ("is a robust validation/testing suite in the spec, along
+with unit testing for each part of the model?"). §24 ("Testing Strategy") is
+a full normative section; auditing the actual suite against its eleven
+subsections found five real, closeable gaps, all now closed (all eight
+`tasks.md` tasks done):
+
+- **§24.2 property tests, not implemented at all** despite `hypothesis`
+  being a pinned dev dependency since T01 — `tests/property/
+  test_lp_properties.py` now covers all eight listed properties (conservation,
+  supply/fee/elasticity monotonicity, permutation invariance, empty-scenario-
+  equals-baseline, scenario repeatability, non-negativity), each scoped
+  narrowly enough to stay unconditionally true (documented per-test, not
+  "usually passes").
+- **`InventoryBalanceConstraint`/`TransitionIdentityConstraint`** had no
+  dedicated, isolated unit test (only indirect golden-solve coverage) —
+  `tests/unit/test_lp_compiler.py` gained one each, strengthening
+  `specs/spec002/TRACEABILITY.md`'s `LP-002` evidence.
+- **§24.5's existing-loan-churn case** (1.00% current route vs. a 1.10%
+  candidate, transition-cost-gated) reproduced in
+  `tests/golden/test_existing_loan_churn.py`.
+- **§24.6's "hard utilization floor exceeds cap" infeasibility case**
+  reproduced in `tests/golden/test_utilization_floor_exceeds_cap.py` (two
+  independently-valid `UtilizationPolicy` records whose *combination*
+  conflicts). The other §24.6 case in that bullet — counterparty minima vs.
+  maxima — genuinely cannot be tested: `CounterpartyLimit` has no minimum
+  field. Tracked as a follow-up, not silently skipped.
+- **§24.8 performance tests, none existed** — `tests/benchmark/
+  test_core_desk_scale.py` (`@pytest.mark.slow`, excluded from the default
+  run via `pyproject.toml`'s `addopts`) is a smoke test, not tracked-baseline
+  regression detection: at the Core desk shape (~5,000 inventory / 50,000
+  route / 25,000 demand-group records), compile+solve+verify completes in
+  ~1.2s, well under the 120s ceiling chosen to catch a catastrophic
+  regression without machine-variance flakiness.
+
+§24.9-§24.11 (Bloomberg, eligibility/collateral/schedule, agency/prime/
+platform tests) are correctly untested — those subsystems don't exist yet,
+so there is nothing to gap-check; not a finding.
+
 ### Phase 3 — MIP business rules (`01_SPEC.md` §14; `00_PLAN.md`) — next up
 
 Not started. Lot sizes, minimum tickets, all-or-none requests, route
@@ -251,15 +299,17 @@ HiGHS/`CompiledProblem` stack — not a replacement for it. Verified concretely
 
 ### How to actually start
 
-**T11, T12, and T13-T14 all done** (2026-09-04, 2026-09-05, 2026-09-05) — see
-above. Repeat the same "write the spec first" pattern for Phase 3 (MIP
-business rules) next: invoke `workflow_orchestrator`, let it route to
-`agents/optimization/mixed_integer_optimization/` for turning §14's lot-size/
-all-or-none/cardinality/rate-ladder requirements into `REQ-*`/`AC-*` rows and
+**T11, T12, T13-T14, and the §24 test-hardening pass are all done**
+(2026-09-04, 2026-09-05 ×3) — see above. Repeat the same "write the spec
+first" pattern for Phase 3 (MIP business rules) next: invoke
+`workflow_orchestrator`, let it route to `agents/optimization/
+mixed_integer_optimization/` for turning §14's lot-size/all-or-none/
+cardinality/rate-ladder requirements into `REQ-*`/`AC-*` rows and
 `testing_validation` for the AC tests (including both proven-optimal and
 time-limited-feasible outcomes — `00_PLAN.md`'s own exit gate), and write a
-real `specs/0005-*` directory tracked by the same `spec`/`spec-index` gates
-the three specs before it used.
+real `specs/0006-*` directory (`0005` is now taken by
+`specs/0005-test-hardening/`) tracked by the same `spec`/`spec-index` gates
+the specs before it used.
 
 ## Open items for the next agent (not yet resolved)
 

@@ -52,6 +52,10 @@ packages = ["src/inventory_optimizer"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+addopts = "-m 'not slow'"
+markers = [
+  "slow: not run by default (excluded by addopts); opt in with `pytest tests/ -m slow -q`.",
+]
 
 [tool.ruff]
 line-length = 100

@@ -179,3 +179,16 @@ def test_demand_shock_overrides_reference_quantity(e1_request) -> None:
     # Untouched fields keep their baseline value.
     baseline_demand = next(d for d in e1_request.demand if d.demand_group_id == "DG-A")
     assert scenario_demand.reference_fee_rate == baseline_demand.reference_fee_rate
+
+
+def test_empty_scenario_equals_baseline(e1_request) -> None:
+    """Section 24.2's "applying an empty scenario equals baseline" property
+    (specs/0005-test-hardening/spec.md AC-006) -- deterministic, no hypothesis needed."""
+    empty_scenario = Scenario(scenario_id="EMPTY", name="no-op scenario")
+
+    scenario_request, warnings = apply_scenario(e1_request, empty_scenario)
+
+    assert warnings == ()
+    assert scenario_request.request_id == f"{e1_request.request_id}::EMPTY"
+    reverted = scenario_request.model_copy(update={"request_id": e1_request.request_id})
+    assert reverted.model_dump_json() == e1_request.model_dump_json()
