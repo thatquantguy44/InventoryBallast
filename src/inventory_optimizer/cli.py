@@ -22,13 +22,16 @@ from pathlib import Path
 
 from inventory_optimizer.domain.enums import SolverStatus
 from inventory_optimizer.domain.requests import OptimizationRequest
+from inventory_optimizer.domain.scenarios import Scenario
 from inventory_optimizer.exceptions import (
     AttributionMismatchError,
     ConfigurationError,
     InputValidationError,
     RegistrationError,
+    ScenarioApplicationError,
 )
 from inventory_optimizer.facade import InventoryOptimizer, load_config
+from inventory_optimizer.scenarios.runner import run_scenarios
 from inventory_optimizer.validation import validate_request
 
 # Exit codes (Section 17.3; specs/0003-public-api-cli/plan.md's exit-code table).
@@ -190,12 +193,62 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
     return EXIT_SUCCESS if all_passed else EXIT_INTERNAL_ERROR
 
 
+def _load_scenarios(scenario_path: str) -> tuple[tuple[Scenario, ...], bool] | None:
+    """Returns ``(scenarios, was_single_object)`` or ``None`` (after printing a diagnostic) on
+    any load/parse/validation failure. A scenario file is either one ``Scenario`` object or a
+    JSON array of them (REQ-010)."""
+    try:
+        raw = json.loads(Path(scenario_path).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        _eprint(f"invalid input: could not read/parse {scenario_path!r}: {exc}")
+        return None
+    try:
+        if isinstance(raw, list):
+            return tuple(Scenario.model_validate(item) for item in raw), False
+        return (Scenario.model_validate(raw),), True
+    except Exception as exc:  # pydantic.ValidationError: structural/type errors, not our own
+        _eprint(f"invalid input: {scenario_path!r} is not a valid Scenario (or list of): {exc}")
+        return None
+
+
 def _cmd_scenarios(args: argparse.Namespace) -> int:
-    _eprint(
-        "scenarios: not implemented yet -- the scenario engine (T13-T14) has not started. "
-        "See specs/0003-public-api-cli/spec.md's Non-Goals."
-    )
-    return EXIT_INTERNAL_ERROR
+    request = _load_request(args.request)
+    if request is None:
+        return EXIT_INVALID_INPUT
+    loaded = _load_scenarios(args.scenario)
+    if loaded is None:
+        return EXIT_INVALID_INPUT
+    scenarios, was_single = loaded
+
+    try:
+        config = load_config(config_path=Path(args.config) if args.config else None)
+        optimizer = InventoryOptimizer(config=config)
+        baseline_result = optimizer.optimize(request)
+        comparisons = run_scenarios(request, baseline_result, scenarios, optimizer)
+    except InputValidationError as exc:
+        _eprint(f"invalid input: {exc}")
+        return EXIT_INVALID_INPUT
+    except ScenarioApplicationError as exc:
+        _eprint(f"invalid input: {exc}")
+        return EXIT_INVALID_INPUT
+    except ConfigurationError as exc:
+        _eprint(f"configuration error: {exc}")
+        return EXIT_INTERNAL_ERROR
+    except (RegistrationError, AttributionMismatchError) as exc:
+        _eprint(f"internal error: {exc}")
+        return EXIT_INTERNAL_ERROR
+
+    if was_single:
+        payload = comparisons[0].model_dump_json(indent=2)
+    else:
+        payload = json.dumps([c.model_dump(mode="json") for c in comparisons], indent=2)
+    _write_output(payload, args.output)
+
+    if any(c.status in _INFEASIBLE_STATUSES for c in comparisons):
+        return EXIT_INFEASIBLE_OR_UNBOUNDED
+    if any(not c.verification_passed for c in comparisons):
+        return EXIT_INTERNAL_ERROR
+    return EXIT_SUCCESS
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -211,9 +264,13 @@ def _build_parser() -> argparse.ArgumentParser:
     p_optimize.add_argument("--config", help="Path to a YAML config file (the 'run' layer).")
     p_optimize.add_argument("--output", help="Write the OptimizationResult JSON here, not stdout.")
 
-    sub.add_parser("scenarios", help="Not yet implemented (T13-T14).").add_argument(
-        "--request", required=False, help="Path to a scenario batch JSON file."
+    p_scenarios = sub.add_parser("scenarios", help="Run one or more scenarios against a request.")
+    p_scenarios.add_argument("--request", required=True, help="Path to the baseline request JSON.")
+    p_scenarios.add_argument(
+        "--scenario", required=True, help="Path to a Scenario JSON file (object or array)."
     )
+    p_scenarios.add_argument("--config", help="Path to a YAML config file (the 'run' layer).")
+    p_scenarios.add_argument("--output", help="Write the comparison JSON here, not stdout.")
 
     p_components = sub.add_parser("components", help="List every registered component.")
     p_components.add_argument("--output", help="Write JSON output here instead of stdout.")

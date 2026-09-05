@@ -61,3 +61,11 @@ class AttributionMismatchError(Exception):
             f"objective attribution sum {attributed_sum!r} disagrees with solver objective "
             f"{claimed_objective!r} by more than tolerance {tolerance!r}"
         )
+
+
+class ScenarioApplicationError(Exception):
+    """Raised when a ``Scenario`` cannot be applied to a baseline request: an unordered
+    composition conflict (two effective ``RETURN``/``RECALL`` events on the same route, Section
+    13.2) or a physically-impossible trade (a ``SELL``/``TRANSFER_OUT`` larger than the inventory
+    record's ``total_lendable_shares``). Never caught and silently resolved by picking one
+    arbitrary outcome."""

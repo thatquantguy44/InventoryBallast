@@ -102,3 +102,18 @@ class ReasonCode(StrEnum):
     CLIENT_REUSE_NOT_AUTHORIZED = "client_reuse_not_authorized"
     HARD_COVERAGE_REQUIREMENT = "hard_coverage_requirement"
     BALANCE_SHEET_LIMIT_BINDING = "balance_sheet_limit_binding"
+
+
+class TradeEventType(StrEnum):
+    """Section 13.1's seven typed trade-event kinds. Order here is also this repo's own
+    deterministic tie-break for same-effective-date event sorting (Section 13.3) -- no ordering
+    is given anywhere else, so the declaration order below is the documented choice
+    (specs/0004-scenario-engine/spec.md's Assumptions)."""
+
+    BUY = "buy"
+    SELL = "sell"
+    TRANSFER_IN = "transfer_in"
+    TRANSFER_OUT = "transfer_out"
+    NEW_LOAN = "new_loan"
+    RETURN = "return"
+    RECALL = "recall"

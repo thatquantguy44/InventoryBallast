@@ -1,29 +1,54 @@
-"""Public service protocols (T12; Section 17.2).
+"""Public service protocols (T12 §17.2; T13-T14 §13 for ``ScenarioService``).
 
 Sits at the top level, not under ``ports/`` -- ``ports/solver.py``'s own docstring scopes that
 package to internal backend-abstraction protocols; these front the outward-facing contract §17.2
 names, a different audience (callers of this library) than ``ports/``'s (backend implementers).
 
-``ScenarioService`` is deliberately not defined here: it would reference ``ScenarioBatchRequest``/
-``ScenarioComparison``, neither of which exists yet (the scenario engine, T13-T14, hasn't started).
-Defining a Protocol against types that don't exist would lock in a signature before that work
-decides its own shape -- see ``specs/0003-public-api-cli/spec.md``'s Non-Goals.
+``ScenarioService`` was deliberately left undefined by T12 (it would have referenced
+``ScenarioComparison``, which did not exist until the scenario engine, T13-T14, was built) -- see
+``specs/0003-public-api-cli/spec.md``'s Non-Goals for that deferral and
+``specs/0004-scenario-engine/spec.md`` for what it now covers.
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
 from inventory_optimizer.domain.enums import ReasonCode
 from inventory_optimizer.domain.requests import OptimizationRequest
 from inventory_optimizer.domain.results import OptimizationResult
+from inventory_optimizer.domain.scenario_results import ScenarioComparison
+from inventory_optimizer.domain.scenarios import Scenario
+from inventory_optimizer.facade import InventoryOptimizer
+from inventory_optimizer.scenarios.runner import run_scenarios
 
 
 @runtime_checkable
 class OptimizationService(Protocol):
     def optimize(self, request: OptimizationRequest) -> OptimizationResult: ...
+
+
+@runtime_checkable
+class ScenarioService(Protocol):
+    def run(
+        self, baseline: OptimizationRequest, scenarios: Sequence[Scenario]
+    ) -> tuple[ScenarioComparison, ...]: ...
+
+
+class ScenarioServiceImpl:
+    """The concrete ``ScenarioService``. Solves the baseline once, then delegates to
+    ``scenarios.runner.run_scenarios`` -- no scenario-specific solve logic duplicated here."""
+
+    def __init__(self, optimizer: InventoryOptimizer) -> None:
+        self._optimizer = optimizer
+
+    def run(
+        self, baseline: OptimizationRequest, scenarios: Sequence[Scenario]
+    ) -> tuple[ScenarioComparison, ...]:
+        baseline_result = self._optimizer.optimize(baseline)
+        return run_scenarios(baseline, baseline_result, scenarios, self._optimizer)
 
 
 @runtime_checkable

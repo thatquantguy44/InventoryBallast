@@ -61,7 +61,7 @@ Every acceptance criterion must be named by at least one test.
 | AC-012 | `test_cli.py::test_optimize_infeasible_request_has_distinct_exit_code` | done |
 | AC-013 | `test_cli.py::test_components_lists_known_registrations` | done |
 | AC-014 | `test_cli.py::test_doctor_reports_per_check_pass_fail` + `test_doctor_names_solver_backend_failure_specifically` | done |
-| AC-015 | `test_cli.py::test_scenarios_subcommand_fails_fast_and_appears_in_help` | done |
+| AC-015 | Superseded 2026-09-05 — see `spec.md`'s AC-015 note; `test_cli.py::test_scenarios_subcommand_appears_in_help` covers what's still true | superseded |
 
 ## Follow-ups
 

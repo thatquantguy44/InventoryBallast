@@ -48,26 +48,27 @@ scope.
 
 Per `specs/spec002/00_PLAN.md`'s status line and `TRACEABILITY.md`:
 
-- **Implemented and tested:** T01-T12, T34, and the `securities_lending_inventory`
+- **Implemented and tested:** T01-T14, T34, and the `securities_lending_inventory`
   baseline of T35 — package scaffold, domain contracts, config, elasticity
   (`elasticity/`), sparse LP formulation (`formulation/`), the baseline LP compiler
   (`formulation/lp.py::compile_lp`), the HiGHS backend (`solvers/highs.py`), the
   independent solution verifier (`validation/solution_verifier.py`), T11's
   result/attribution/explainability layer (`reporting/`;
-  `specs/0002-result-attribution-explainability/`), and (as of 2026-09-05) T12's
-  public API facade + CLI (`facade.py`, `services.py`, `cli.py`;
-  `specs/0003-public-api-cli/`). 125 tests pass (`pytest tests/ -q`, with the
+  `specs/0002-result-attribution-explainability/`), T12's public API facade + CLI
+  (`facade.py`, `services.py`, `cli.py`; `specs/0003-public-api-cli/`), and (as of
+  2026-09-05) T13-T14's scenario engine plus a basic stress-testing capability
+  (`scenarios/`, `domain/scenarios.py`, `domain/scenario_results.py`;
+  `specs/0004-scenario-engine/`). 141 tests pass (`pytest tests/ -q`, with the
   `highs` extra installed), plus a real `pip install -e .` console script
-  (`inventory-optimizer`).
-- **Not yet started:** the scenario engine (T13-T14, Phase 2) — see "Next
-  priorities" below.
+  (`inventory-optimizer`, now including a working `scenarios` subcommand).
+- **Not yet started:** Phase 3 (MIP business rules) — see "Next priorities" below.
 
 ## Environment
 
 ```bash
 python3 -m venv .venv
 .venv/bin/python -m pip install -e ".[dev,highs,dataframe,agentic]"
-.venv/bin/python -m pytest tests/ -q   # 125 passed, as of this writing
+.venv/bin/python -m pytest tests/ -q   # 141 passed, as of this writing
 inventory-optimizer doctor              # sanity-check the installed console script
 ```
 
@@ -139,20 +140,58 @@ gate is a cross-cutting platform-ownership release approval shared with
 `PLT-001`, `PLT-003`-`PLT-006` (all T17/T34-owned, none of which this repo
 builds), not something T12 grants unilaterally.
 
-### T13-T14 — Scenario engine (`01_SPEC.md` §13; Phase 2) — next up
+### T13-T14 — Scenario engine and basic stress testing (`01_SPEC.md` §13; Phase 2) — done (2026-09-05)
 
-Not started. `00_PLAN.md`'s "Implementation Sequence" Phase 2: scenario
-overlays that never mutate the baseline (`SCN-001`), trades that alter supply
-only when effective/settled/eligible (`SCN-002`), batch vs. isolated scenario
-equivalence (`SCN-003`), and desk-typed scenario events (`SCN-004`) —
-`specs/spec002/TRACEABILITY.md`'s `SCN-001`-`SCN-004` rows are all still
-`SPECIFIED`. This is also what unblocks `services.ScenarioService` and the
-CLI's `scenarios` subcommand, both deliberately left undefined/stubbed by T12
-pending this work (see `specs/0003-public-api-cli/tasks.md`'s Follow-ups).
+`specs/0004-scenario-engine/` (`spec.md`, `plan.md`, `tasks.md`) — all ten
+tasks (`T-001`-`T-010`) done: `domain/scenarios.py` (`TradeEvent` — all seven
+§13.1 types — `RateShock`, `DemandShock`, `Scenario`), `domain/
+scenario_results.py` (`ScenarioComparison`, `StressTestReport`), the
+`scenarios/` package (`apply.py::apply_scenario`, `compare.py::
+build_scenario_comparison`, `runner.py::run_scenario`/`run_scenarios`/
+`run_stress_test`), `services.ScenarioService` (finally defined, unblocking
+T12's own deferral), and a real `inventory-optimizer scenarios` CLI
+subcommand (single scenario file or a batch array). 16 new tests (141 total,
+all passing) — including `tests/golden/test_e2_rate_shock_scenario.py` and
+`test_e3_sale_and_recall_scenario.py`, which reproduce `EXAMPLES.md`'s E2 and
+E3 **exactly**, with zero changes to `reporting/`, `formulation/`, or
+`validation/`.
 
-After Phase 2: Phase 3 (MIP business rules), Phase 4 (QP), Phase 5
-(nonlinear/multi-period research), the Bloomberg-enriched realism workstream, and
-the agency/prime desk workstream — see `00_PLAN.md` for exit gates on each.
+**Basic stress testing** (added at the owner's request, beyond `01_SPEC.md`
+§13's own text, so it carries no `specs/spec002/TRACEABILITY.md` row of its
+own): `scenarios.runner.run_stress_test(baseline_request, baseline_result,
+scenarios, optimizer) -> StressTestReport` runs a batch of (typically
+adverse) scenarios and summarizes worst-case degradation in one report —
+feasible/infeasible/verification-failed counts, and the single worst-case
+scenario by objective delta among the feasible ones. Library function only
+so far; no CLI subcommand yet (`specs/0004-scenario-engine/tasks.md`'s
+Follow-ups) — a natural next increment once a real stress-testing workflow
+exists.
+
+Two design notes worth reading before extending this further (both in
+`specs/0004-scenario-engine/plan.md`): (1) a scenario-modified request is
+deliberately never round-tripped through `model_validate`/JSON reload before
+solving — that's what lets a `SELL` legitimately represent an "oversold,
+pending recall" book state (E3's own setup) without a `SecurityInventory`
+domain-model change; `ScenarioComparison.warnings` surfaces that state
+explicitly rather than hiding it. (2) `schedule_overlays`, `collateral_shocks`,
+`desk_events`, `InventoryShock`, and `PolicyOverride` are all deliberately
+**not** implemented — `specs/spec002/TRACEABILITY.md`'s `SCN-004` row stays
+`SPECIFIED` (tagged `T40`); the rest wait on T29/T30-T32/T35-T39 or a real
+worked example to pin their shape down.
+
+### Phase 3 — MIP business rules (`01_SPEC.md` §14; `00_PLAN.md`) — next up
+
+Not started. Lot sizes, minimum tickets, all-or-none requests, route
+activation, cardinality constraints, and discrete rate-ladder selection —
+`00_PLAN.md`'s exit gate: "integrality is verified after solve; a
+time-limited incumbent is never labeled optimal." This is also what the
+`quantsmith.pipelines.optimization_solvers.solve_milp` reference solver
+(see "The `quantsmith` package" below) becomes useful for, as an independent
+toy-scale cross-check during design review.
+
+After Phase 3: Phase 4 (QP), Phase 5 (nonlinear/multi-period research), the
+Bloomberg-enriched realism workstream, and the agency/prime desk
+workstream — see `00_PLAN.md` for exit gates on each.
 
 ## Using QuantSmith to build the rest of this repo
 
@@ -164,8 +203,8 @@ beyond just the constitution/gates already wired into CI.
 | Next task | QuantSmith agent |
 | --- | --- |
 | T11 (done) — shadow prices, solver diagnostics, reason codes | `agents/optimization/solver_diagnostics_sensitivity/` |
-| T12 (done) / T13-T14 and later phases — turning an ambiguous next decision into variables/constraints/ACs before coding | `agents/optimization/problem_formulation/` |
-| Phase 3 — MIP business rules (lot sizes, all-or-none, cardinality) | `agents/optimization/mixed_integer_optimization/` |
+| T12 (done), T13-T14 (done) / Phase 3 and later phases — turning an ambiguous next decision into variables/constraints/ACs before coding | `agents/optimization/problem_formulation/` |
+| Phase 3 (next up) — MIP business rules (lot sizes, all-or-none, cardinality) | `agents/optimization/mixed_integer_optimization/` |
 | Collateral workstream (T30-T32: haircuts, capacity, joint mode) | `agents/optimization/collateral_margin_optimization/` — named for exactly this problem |
 | General LP review as more constraint components get added | `agents/optimization/linear_programming/` |
 | Routing the above as work grows | `agents/optimization/optimization_orchestrator/` |
@@ -212,14 +251,15 @@ HiGHS/`CompiledProblem` stack — not a replacement for it. Verified concretely
 
 ### How to actually start
 
-**T11 and T12 both done** (2026-09-04, 2026-09-05) — see above. Repeat the
-same "write the spec first" pattern for T13-T14 (scenario engine) next:
-invoke `workflow_orchestrator`, let it route to `problem_formulation` for
-turning §13's scenario-overlay semantics into `REQ-*`/`AC-*` rows and
-`testing_validation` for the AC tests, and write a real `specs/0004-*`
-directory tracked by the same `spec`/`spec-index` gates T11's and T12's specs
-were. This is also the gate that unblocks `services.ScenarioService` and the
-CLI's `scenarios` subcommand, both intentionally left undefined by T12.
+**T11, T12, and T13-T14 all done** (2026-09-04, 2026-09-05, 2026-09-05) — see
+above. Repeat the same "write the spec first" pattern for Phase 3 (MIP
+business rules) next: invoke `workflow_orchestrator`, let it route to
+`agents/optimization/mixed_integer_optimization/` for turning §14's lot-size/
+all-or-none/cardinality/rate-ladder requirements into `REQ-*`/`AC-*` rows and
+`testing_validation` for the AC tests (including both proven-optimal and
+time-limited-feasible outcomes — `00_PLAN.md`'s own exit gate), and write a
+real `specs/0005-*` directory tracked by the same `spec`/`spec-index` gates
+the three specs before it used.
 
 ## Open items for the next agent (not yet resolved)
 

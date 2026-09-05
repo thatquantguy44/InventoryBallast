@@ -96,9 +96,9 @@ and links concrete evidence.
 | COL-002 | Capacity mode limits exposure by margin-adjusted collateral credit | 11.11 | collateral-capacity component | capacity/schedule | E5A | T31 / R3 / G2B | `SPECIFIED` |
 | COL-003 | Joint mode conserves collateral and enforces haircut coverage | 11.11 | joint collateral variables/rows | joint mode | E5B | T32 / R4 / G2B | `SPECIFIED` |
 | COL-004 | Concentration and wrong-way exclusions are explicit and verified | 9.6, 11.11 | collateral rows/pair generation | collateral schedule | E5B; exclusion tests | T30-T32 / R3-R4 / G2B | `SPECIFIED` |
-| SCN-001 | Scenario overlays never mutate the baseline | 13 | scenario apply/runner | scenario config | E2-E4; hash tests | T13-T14 / R2 | `SPECIFIED` |
-| SCN-002 | Trades alter supply only when effective, settled, and eligible | 13.2-13.3 | trade overlays/calendars | trade events | E3 | T13, T21 / R2-R3 | `SPECIFIED` |
-| SCN-003 | Batch and isolated scenarios are equivalent | 13.4 | scenario runner | batch config | E2; integration tests | T14 / R2 | `SPECIFIED` |
+| SCN-001 | Scenario overlays never mutate the baseline | 13 | scenario apply/runner | scenario config | E2, E3; `tests/unit/test_scenarios_apply.py::test_apply_scenario_never_mutates_baseline`, `tests/golden/test_e2_rate_shock_scenario.py::test_baseline_request_unchanged_after_scenario` | T13-T14 / R2 | `IMPLEMENTED` (E4's schedule-overlay portion not attempted — no schedule subsystem exists yet, T29) |
+| SCN-002 | Trades alter supply only when effective, settled, and eligible | 13.2-13.3 | trade overlays/calendars | trade events | E3; `tests/golden/test_e3_sale_and_recall_scenario.py`, `tests/unit/test_scenarios_apply.py::test_event_after_effective_date_is_not_applied` | T13, T21 / R2-R3 | `IMPLEMENTED` (calendar/holiday-aware settlement timing, `T21`, not attempted — plain `effective_date` comparison only) |
+| SCN-003 | Batch and isolated scenarios are equivalent | 13.4 | scenario runner | batch config | E2; `tests/unit/test_scenarios_runner.py::test_batch_matches_isolated_runs` | T14 / R2 | `IMPLEMENTED` |
 | SCN-004 | Desk events are typed and allowed only for the selected family | 13.1, 23.6 | desk scenario overlays | desk events | agency/prime scenario tests | T40 / D1-D2 | `SPECIFIED` |
 
 ---

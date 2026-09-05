@@ -90,6 +90,10 @@ class InventoryOptimizer:
         self._backend = backend if backend is not None else _resolve_backend(config.solver)
         self._config_hash = config_hash(config)
 
+    @property
+    def config(self) -> InventoryOptimizerConfig:
+        return self._config
+
     def optimize(
         self,
         request: OptimizationRequest,

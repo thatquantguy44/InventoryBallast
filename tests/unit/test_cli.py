@@ -186,14 +186,80 @@ def test_doctor_names_solver_backend_failure_specifically(monkeypatch, capsys) -
     assert "highs" in solver_check["detail"]
 
 
-def test_scenarios_subcommand_fails_fast_and_appears_in_help(capsys) -> None:
-    """AC-015."""
-    exit_code = main(["scenarios"])
-    err = capsys.readouterr().err
+def _write_scenario_file(path: Path, scenarios: list) -> None:
+    if len(scenarios) == 1:
+        payload = scenarios[0].model_dump(mode="json")
+    else:
+        payload = [s.model_dump(mode="json") for s in scenarios]
+    path.write_text(json.dumps(payload))
 
-    assert exit_code == EXIT_INTERNAL_ERROR
-    assert "T13" in err or "T14" in err
 
+def test_scenarios_single_and_batch_files(tmp_path, e1_request) -> None:
+    """AC-009 (specs/0004-scenario-engine/)."""
+    from inventory_optimizer.domain.enums import TradeEventType
+    from inventory_optimizer.domain.scenarios import Scenario, TradeEvent
+
+    request_path = tmp_path / "request.json"
+    _write_request(request_path, e1_request)
+
+    def _sell(scenario_id: str, quantity: float) -> Scenario:
+        event = TradeEvent(
+            event_id=f"{scenario_id}-SELL",
+            event_type=TradeEventType.SELL,
+            trade_date=e1_request.effective_date,
+            effective_date=e1_request.effective_date,
+            settlement_date=e1_request.effective_date,
+            quantity_shares=quantity,
+            inventory_id="INV-1",
+            source="fixture",
+            source_version="v1",
+        )
+        return Scenario(scenario_id=scenario_id, name=scenario_id, trade_events=(event,))
+
+    single_path = tmp_path / "single.json"
+    _write_scenario_file(single_path, [_sell("SALE-5", 5.0)])
+    batch_path = tmp_path / "batch.json"
+    _write_scenario_file(batch_path, [_sell("SALE-5", 5.0), _sell("SALE-10", 10.0)])
+
+    single_output = tmp_path / "single_result.json"
+    exit_single = main(
+        [
+            "scenarios",
+            "--request",
+            str(request_path),
+            "--scenario",
+            str(single_path),
+            "--output",
+            str(single_output),
+        ]
+    )
+    batch_output = tmp_path / "batch_result.json"
+    exit_batch = main(
+        [
+            "scenarios",
+            "--request",
+            str(request_path),
+            "--scenario",
+            str(batch_path),
+            "--output",
+            str(batch_output),
+        ]
+    )
+
+    assert exit_single == EXIT_SUCCESS
+    assert exit_batch == EXIT_SUCCESS
+    single_payload = json.loads(single_output.read_text())
+    assert isinstance(single_payload, dict)
+    assert single_payload["scenario_id"] == "SALE-5"
+    batch_payload = json.loads(batch_output.read_text())
+    assert isinstance(batch_payload, list)
+    assert len(batch_payload) == 2
+
+
+def test_scenarios_subcommand_appears_in_help(capsys) -> None:
+    """AC-015 (T12): `scenarios` is a real subcommand as of T13-T14
+    (tests/unit/test_scenarios_cli.py covers its actual behavior); this test only confirms it is
+    still listed."""
     with pytest.raises(SystemExit):
         main(["--help"])
     assert "scenarios" in capsys.readouterr().out

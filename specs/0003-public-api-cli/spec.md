@@ -180,7 +180,7 @@ above) and is a precondition for moving this spec's Status past `Draft`.
 | AC-012 | Given a request engineered to be infeasible, when `inventory-optimizer optimize` runs against it, then its exit code differs from both AC-011's success case and AC-010's invalid-input case. | REQ-010 |
 | AC-013 | Given no request/config files at all, when `inventory-optimizer components` runs, then it prints every `(kind, name, version)` from `default_registry.manifest()` post-import, including at least `fee_revenue`, `transition_cost`, and `inventory_balance`. | REQ-011 |
 | AC-014 | Given a working environment with `highspy` installed, when `inventory-optimizer doctor` runs, then it exits zero and reports every check as passing; given `highspy` is not importable, it exits non-zero and names the solver-backend check specifically as the failure, not a generic traceback. | REQ-012, NFR-002 |
-| AC-015 | Given `inventory-optimizer scenarios --request batch.json --config run.yaml`, when run today, then it exits non-zero with a message naming T13/T14, and `scenarios` still appears in `--help`'s subcommand list. | REQ-013 |
+| AC-015 | **Superseded 2026-09-05 by `specs/0004-scenario-engine/`:** `scenarios` is now a real subcommand (T13-T14 shipped); this AC's original "exits non-zero naming T13/T14" behavior no longer applies. `tests/unit/test_cli.py::test_scenarios_subcommand_appears_in_help` keeps only the still-true half (the verb appears in `--help`); `specs/0004-scenario-engine/spec.md`'s own AC-009 covers the real behavior. | REQ-013 |
 
 ## Data & Dependencies
 
