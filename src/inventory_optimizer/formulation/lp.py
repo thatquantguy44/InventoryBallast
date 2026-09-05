@@ -16,10 +16,6 @@ sufficient for the one family that exists today.
 
 from __future__ import annotations
 
-from collections import defaultdict
-from collections.abc import Callable, Iterable
-from typing import TypeVar
-
 # Importing these registers the baseline constraint/objective components (Section 15: registration
 # happens at module import).
 from inventory_optimizer.components.constraints import (
@@ -39,17 +35,15 @@ from inventory_optimizer.components.registry import (
     ComponentRegistration,
     default_registry,
 )
-from inventory_optimizer.config.models import ElasticityConfig, InventoryOptimizerConfig
+from inventory_optimizer.config.models import InventoryOptimizerConfig
 from inventory_optimizer.domain.enums import Formulation, ObjectiveSense
 from inventory_optimizer.domain.loans import LoanRoute
 from inventory_optimizer.domain.requests import OptimizationRequest
-from inventory_optimizer.elasticity import EvaluatedDemand, evaluate_demand_cap
 from inventory_optimizer.exceptions import InputValidationError, RegistrationError, ValidationIssue
 from inventory_optimizer.formulation.compiled import CompiledProblem
-from inventory_optimizer.formulation.context import BuildContext
+from inventory_optimizer.formulation.context import build_context
 from inventory_optimizer.formulation.indexes import VariableKey
 from inventory_optimizer.formulation.sparse_builder import SparseBuilder
-from inventory_optimizer.formulation.variables import build_variable_index
 
 REQUIRED_CONSTRAINTS: tuple[str, ...] = (
     "inventory_balance",
@@ -61,15 +55,6 @@ REQUIRED_CONSTRAINTS: tuple[str, ...] = (
 )
 REQUIRED_OBJECTIVES: tuple[str, ...] = ("fee_revenue", "transition_cost")
 _COMPONENT_VERSION = "1"
-
-T = TypeVar("T")
-
-
-def _group_by(items: Iterable[T], *, key: Callable[[T], str]) -> dict[str, tuple[T, ...]]:
-    grouped: dict[str, list[T]] = defaultdict(list)
-    for item in items:
-        grouped[key(item)].append(item)
-    return {group_key: tuple(values) for group_key, values in grouped.items()}
 
 
 def _resolve_component(name: str) -> tuple[ComponentKind, ComponentRegistration]:
@@ -106,47 +91,11 @@ def _set_route_bounds(builder: SparseBuilder, route: LoanRoute) -> None:
     builder.set_variable_bounds(VariableKey("dec", route.route_id), lower=0.0, upper=dec_upper)
 
 
-def _compute_demand_caps(
-    request: OptimizationRequest, elasticity_config: ElasticityConfig
-) -> dict[str, EvaluatedDemand]:
-    """Section 12.1: elasticity runs once, before model construction. The evaluated fee for a
-    group is its routes' shared ``fee_rate`` (uniform by Section 12.2, already enforced by
-    ``validation.reconciliation.check_demand_group_fee_consistency``); a group with no routes yet
-    falls back to its own reference fee."""
-    routes_by_group = _group_by(request.routes, key=lambda route: route.demand_group_id)
-    caps: dict[str, EvaluatedDemand] = {}
-    for forecast in request.demand:
-        group_routes = routes_by_group.get(forecast.demand_group_id, ())
-        evaluated_fee = group_routes[0].fee_rate if group_routes else forecast.reference_fee_rate
-        caps[forecast.demand_group_id] = evaluate_demand_cap(
-            forecast, evaluated_fee, config=elasticity_config
-        )
-    return caps
-
-
 def compile_lp(request: OptimizationRequest, config: InventoryOptimizerConfig) -> CompiledProblem:
-    variable_index = build_variable_index(
-        [
-            ("q", [route.route_id for route in request.routes]),
-            ("inc", [route.route_id for route in request.routes]),
-            ("dec", [route.route_id for route in request.routes]),
-            ("a", [inventory.inventory_id for inventory in request.inventory]),
-        ]
-    )
-    builder = SparseBuilder(variable_index)
+    context = build_context(request, config)
+    builder = SparseBuilder(context.variable_index)
     for route in request.routes:
         _set_route_bounds(builder, route)
-
-    context = BuildContext(
-        request=request,
-        config=config,
-        variable_index=variable_index,
-        demand_caps=_compute_demand_caps(request, config.elasticity),
-        inventory_by_id={inventory.inventory_id: inventory for inventory in request.inventory},
-        routes_by_inventory=_group_by(request.routes, key=lambda route: route.inventory_id),
-        routes_by_demand_group=_group_by(request.routes, key=lambda route: route.demand_group_id),
-        routes_by_borrower=_group_by(request.routes, key=lambda route: route.borrower_id),
-    )
 
     all_names = (*REQUIRED_CONSTRAINTS, *REQUIRED_OBJECTIVES, *config.desk.enabled_components)
     component_names = list(dict.fromkeys(all_names))

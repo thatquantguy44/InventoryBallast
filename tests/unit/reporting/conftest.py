@@ -1,9 +1,7 @@
 """Shared ``VerifiedSolution`` fixtures for T11 reporting tests.
 
-``_solve_and_verify`` builds the same ``BuildContext`` shape ``formulation.lp.compile_lp`` builds
-internally (reusing its private ``_compute_demand_caps``/``_group_by`` helpers so this fixture
-cannot silently drift from what production code actually constructs), then wraps the solved,
-verified request into one ``VerifiedSolution``.
+``_solve_and_verify`` calls the same public ``formulation.context.build_context`` T12's facade
+uses, then wraps the solved, verified request into one ``VerifiedSolution``.
 
 ``e1_solution`` is the shared E1 fixture (``EXAMPLES.md``); ``pinned_route_solution`` adds one
 route that is contractually pinned at its current quantity (``hard_minimum_quantity_shares ==
@@ -19,8 +17,8 @@ import pytest
 
 from inventory_optimizer.config.models import InventoryOptimizerConfig
 from inventory_optimizer.domain.requests import OptimizationRequest
-from inventory_optimizer.formulation.context import BuildContext
-from inventory_optimizer.formulation.lp import _compute_demand_caps, _group_by, compile_lp
+from inventory_optimizer.formulation.context import build_context
+from inventory_optimizer.formulation.lp import compile_lp
 from inventory_optimizer.ports.solver import SolverOptions
 from inventory_optimizer.reporting.types import VerifiedSolution
 from inventory_optimizer.solvers.highs import HighsBackend
@@ -33,19 +31,10 @@ _EFFECTIVE_DATE = date(2026, 9, 3)
 def _solve_and_verify(
     request: OptimizationRequest, config: InventoryOptimizerConfig
 ) -> VerifiedSolution:
+    context = build_context(request, config)
     problem = compile_lp(request, config)
     result = HighsBackend().solve(problem, SolverOptions())
     verification = verify_solution(problem, result)
-    context = BuildContext(
-        request=request,
-        config=config,
-        variable_index=problem.variable_index,
-        demand_caps=_compute_demand_caps(request, config.elasticity),
-        inventory_by_id={inventory.inventory_id: inventory for inventory in request.inventory},
-        routes_by_inventory=_group_by(request.routes, key=lambda route: route.inventory_id),
-        routes_by_demand_group=_group_by(request.routes, key=lambda route: route.demand_group_id),
-        routes_by_borrower=_group_by(request.routes, key=lambda route: route.borrower_id),
-    )
     return VerifiedSolution(
         context=context, problem=problem, result=result, verification=verification
     )
