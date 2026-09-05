@@ -73,6 +73,15 @@ gitignored — recreate it rather than expecting it to be there.
 
 ### T11 — Result, attribution, and explainability (`01_SPEC.md` §18)
 
+**Spec written 2026-09-04:** `specs/0002-result-attribution-explainability/`
+(`spec.md`, `plan.md`, `tasks.md`) — the first real `NNNN-slug` SDD spec in
+this repo, shaped with `agents/optimization/problem_formulation/` and
+`agents/optimization/solver_diagnostics_sensitivity/` per the routing table
+below. Status: Draft, not yet implemented — the `reporting/` package and the
+`domain/results.py` section models described in `plan.md` do not exist yet.
+Read that spec chain before starting `T-001`; the summary below is the
+pre-spec framing, kept for history.
+
 Nothing under `src/inventory_optimizer/` currently builds the
 `OptimizationResult` reporting layer. Needed, per §18:
 
@@ -158,14 +167,20 @@ genuinely additive rather than redundant:
 
 ### How to actually start
 
-Invoke `workflow_orchestrator` on T11 first — it's the concrete, unstarted next
-task. Let it route to `problem_formulation` and `solver_diagnostics_sensitivity`
-for the design and `testing_validation` for the AC tests, and write the result as
-a real `specs/000X-result-attribution/` directory (not just prose in
-`specs/spec002/00_PLAN.md`) so it's tracked by the `spec`/`spec-index` gates
-already enforced in this repo's CI. Right now T11 and T12 exist only as plan
-items in Spec002, not as SDD specs — that's a gap worth closing on the very
-first spec written here.
+**Done (2026-09-04):** `specs/0002-result-attribution-explainability/` is
+written — `spec.md`/`plan.md`/`tasks.md`, shaped with `problem_formulation`
+and `solver_diagnostics_sensitivity`, indexed in `specs/README.md`, tracked by
+the `spec`/`spec-index` gates. It closes the "T11 has no SDD spec" gap this
+section used to call out.
+
+What's left is Implement → Verify: work `tasks.md`'s `T-001` through `T-011`
+in order (they're already ordered and each cites its `REQ-*`/`AC-*`), backed
+by `testing_validation` for the AC tests, then flip
+`specs/spec002/TRACEABILITY.md`'s `LP-007`, `LP-008`, `VER-001`, `VER-002`,
+`VER-005`, `VER-006` rows to `IMPLEMENTED` (`tasks.md`'s `T-010`) and update
+this file's T11 entry to done (`T-011`). Once that ships, repeat the same
+"write the spec first" pattern for T12 (public API/CLI) — see the table
+above for which agent covers each of its pieces.
 
 ## Open items for the next agent (not yet resolved)
 
