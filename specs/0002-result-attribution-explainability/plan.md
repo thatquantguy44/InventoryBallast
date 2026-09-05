@@ -1,7 +1,7 @@
 # Plan: Result, objective attribution, and explainability (T11)
 
 - **Spec:** 0002-result-attribution-explainability (`spec.md`)
-- **Status:** Draft
+- **Status:** Approved
 - **Author:** Joshua Lutkemuller (with `problem_formulation` / `solver_diagnostics_sensitivity` agent review)
 - **Last updated:** 2026-09-04
 
@@ -38,23 +38,41 @@ implement `attribute()` for real instead of raising.
 ```
 domain/results.py
   OptimizationResult            # extended: 13 more §18.1 sections, still frozen/extra=forbid
-  + AllocationRecord, BalanceRecord, EconomicsSummary, DemandSummary,
-    ScheduleSummary, CollateralSummary, DeskSummary, SourceSummary,
-    ConstraintReport, SolverDiagnostics, WarningsSummary, PlatformReference
-    (VerificationReport from T10 is embedded as-is, not duplicated)
+  + AllocationRecord, BalanceRecord, EconomicsSummary, ObjectiveAttributionRecord,
+    DemandSummary, DeskSummary, ConstraintActivity, RowIdentifier,
+    SolverDiagnostics, VerificationSection
+    (schedules/collateral/sources have no upstream domain model yet -> typed `None`;
+    Desk IS populated -- DeskContext + config.desk.enabled_components already exist)
 
 reporting/
   types.py           # VerifiedSolution, ObjectiveAttribution, RouteExplanation,
                       # ShadowPriceEntry -- the shared contracts every module below uses
-  attribution.py     # attribute_objective(problem, result, verification) -> tuple[ObjectiveAttribution, ...]
-  explanations.py    # explain_routes(problem, result, verification, request) -> tuple[RouteExplanation, ...]
-  shadow_prices.py   # build_shadow_prices(problem, result, verification) -> tuple[ShadowPriceEntry, ...]
-  result_builder.py  # build_optimization_result(request, problem, result, verification) -> OptimizationResult
+  attribution.py     # attribute_objective(solution: VerifiedSolution) -> tuple[ObjectiveAttribution, ...]
+  explanations.py    # explain_routes(solution: VerifiedSolution) -> tuple[RouteExplanation, ...]
+  shadow_prices.py   # build_shadow_prices(solution: VerifiedSolution) -> tuple[ShadowPriceEntry, ...]
+  result_builder.py  # build_optimization_result(solution, *, run_id, created_at,
+                      #     config_hash, input_hash, platform=None) -> OptimizationResult
 ```
 
+**Deviation from the sketch above (noted per the tasks.md Definition of Done):**
+every `reporting/` function takes one `VerifiedSolution` bundle as its first
+argument rather than separate `problem`/`result`/`verification` params -- simpler
+call sites, and it's the same bundle `ObjectiveComponent.attribute()` needs
+anyway. `domain/results.py`'s new section models do **not** embed
+`VerificationReport`/`ObjectiveAttribution`/`RowKey` by reference (this plan's
+original wording); each has an equivalent plain-data mirror
+(`VerificationSection`, `ObjectiveAttributionRecord`, `RowIdentifier`) instead,
+because embedding the originals would make `domain/results.py` import
+`validation`/`reporting`/`formulation` -- the one invariant every other
+`domain/*.py` module already upholds (zero upward imports). `reporting.result_builder`
+converts at assembly time; the conversion is a few extra fields copied once per
+result, not a design compromise.
+
 `VerifiedSolution` is the single bundle every downstream module reads from —
+`BuildContext` (so `attribute()` can recompute from the same domain fields
+`contribute()` used, not just echo back the compiled coefficient),
 `CompiledProblem`, `SolverResult`, `VerificationReport`, plus a
-`primal_by_key(VariableKey) -> float` lookup built once over
+`primal_at(VariableKey) -> float` lookup built once over
 `CompiledProblem.variable_index` so no module re-derives that mapping. This
 also becomes the object `ObjectiveComponent.attribute()` receives, replacing
 `solution: object`.
@@ -167,7 +185,7 @@ completeness).
 | --- | --- | --- | --- |
 | Reason-code derivation | Independent predicate function per `ReasonCode`, evaluated against shared evidence | One monolithic scoring function producing all 24 at once | Independent predicates are unit-testable one code at a time (AC-005/006/007 each target a single code) and match how `01_SPEC.md` §18.3 lists them as independent, deterministic checks, not a ranked classifier. |
 | Objective reconciliation tolerance | Reuse `solution_verifier.DEFAULT_TOLERANCE` | A separate, looser attribution-specific tolerance | A second tolerance is a second place to accidentally paper over the same class of bug VER-002 exists to catch; one tolerance keeps VER-001/002/006 mutually consistent by construction. |
-| Missing §18.1 sections (Collateral/Schedules/Sources/Desk) | Typed `None` | Empty-but-present placeholder models with zeroed fields | A present-but-fake record is harder to distinguish from "genuinely zero" than an explicit `None`; matches constitution P6 (honest reporting) and avoids a second migration when those sections get real data sources later. |
+| Missing §18.1 sections (Collateral/Schedules/Sources) | Typed `None` | Empty-but-present placeholder models with zeroed fields | A present-but-fake record is harder to distinguish from "genuinely zero" than an explicit `None`; matches constitution P6 (honest reporting) and avoids a second migration when those sections get real data sources later. (Desk turned out *not* to belong on this list -- `DeskContext` and `config.desk.enabled_components` already exist, so it is populated for real.) |
 | Shadow-price scope | LP-only (`dual is not None` guard), no MIP re-solve path | Build the optional §18.4 fixed-integer re-solve now | No MIP business rules exist yet (Phase 3 not started); building a re-solve path with nothing to test it against risks an untested, unreviewed code path. Tracked as a follow-up. |
 
 ## Validation Strategy

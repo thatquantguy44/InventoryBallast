@@ -23,7 +23,7 @@ specs/
 | ID | Feature | Status |
 | --- | --- | --- |
 | [0001-daily-momentum-signal](0001-daily-momentum-signal/) | Reference spec copied from QuantSmith — a worked, fully traceable example. Not part of InventoryBallast's own scope. | Reference |
-| [0002-result-attribution-explainability](0002-result-attribution-explainability/) | T11 (`spec002/01_SPEC.md` §18): `OptimizationResult` assembly, objective attribution, decision explanations, shadow prices. Closes `TRACEABILITY.md` rows `LP-007`, `LP-008`, `VER-001`, `VER-002`, `VER-005`, `VER-006`. | Draft |
+| [0002-result-attribution-explainability](0002-result-attribution-explainability/) | T11 (`spec002/01_SPEC.md` §18): `OptimizationResult` assembly, objective attribution, decision explanations, shadow prices. Closes `TRACEABILITY.md` rows `LP-007`, `VER-001`, `VER-002`, `VER-005`, `VER-006` (`LP-008` stays open — needs T32). | Implemented |
 | [spec002](spec002/) | The normative specification for `src/inventory_optimizer` (not `NNNN-slug` form — copied from `QR-Haven` pre-dating this repo's spec-driven adoption; see `00_PLAN.md`/`TRACEABILITY.md` for its own phased status). | Living/reference |
 
 InventoryBallast's own specs (the securities-lending inventory optimization

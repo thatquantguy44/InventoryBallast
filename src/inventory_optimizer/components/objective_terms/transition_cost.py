@@ -2,7 +2,9 @@
 
 Expressed here as negative coefficients on ``inc_j``/``dec_j`` under a maximizing objective, which
 is what makes both variables settle at zero unless the transition identity forces otherwise
-(Section 11.3's degeneracy note).
+(Section 11.3's degeneracy note). ``attribute()`` (T11) recomputes the same per-route cost against
+the solved ``inc_j``/``dec_j`` values; at the unchanged baseline both are zero by the transition
+identity (``q_j = q0_j`` implies ``inc_j = dec_j = 0``), so the baseline value is always zero.
 """
 
 from __future__ import annotations
@@ -15,11 +17,15 @@ from inventory_optimizer.exceptions import ValidationIssue
 from inventory_optimizer.formulation.context import BuildContext
 from inventory_optimizer.formulation.indexes import VariableKey
 from inventory_optimizer.formulation.sparse_builder import SparseBuilder
+from inventory_optimizer.reporting.types import ObjectiveAttribution, VerifiedSolution
+
+COMPONENT_NAME = "transition_cost"
+COMPONENT_VERSION = "1"
 
 
 @objective_component(
-    name="transition_cost",
-    version="1",
+    name=COMPONENT_NAME,
+    version=COMPONENT_VERSION,
     formulations={Formulation.LP, Formulation.MIP, Formulation.QP},
 )
 class TransitionCostTerm:
@@ -35,5 +41,19 @@ class TransitionCostTerm:
                 VariableKey("dec", route.route_id), -route.decrease_cost_usd_per_share
             )
 
-    def attribute(self, solution: object) -> object:
-        raise NotImplementedError("objective attribution lands with T11")
+    def attribute(self, solution: VerifiedSolution) -> ObjectiveAttribution:
+        context = solution.context
+        total = 0.0
+        for route in context.request.routes:
+            inc = solution.primal_at(VariableKey("inc", route.route_id))
+            dec = solution.primal_at(VariableKey("dec", route.route_id))
+            total += -(
+                route.increase_cost_usd_per_share * inc + route.decrease_cost_usd_per_share * dec
+            )
+        return ObjectiveAttribution(
+            component_name=COMPONENT_NAME,
+            component_version=COMPONENT_VERSION,
+            unscaled_value_usd=total,
+            baseline_value_usd=0.0,
+            delta_usd=total,
+        )

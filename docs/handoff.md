@@ -48,22 +48,24 @@ scope.
 
 Per `specs/spec002/00_PLAN.md`'s status line and `TRACEABILITY.md`:
 
-- **Implemented and tested:** T01-T10, T34, and the `securities_lending_inventory`
+- **Implemented and tested:** T01-T11, T34, and the `securities_lending_inventory`
   baseline of T35 — package scaffold, domain contracts, config, elasticity
   (`elasticity/`), sparse LP formulation (`formulation/`), the baseline LP compiler
-  (`formulation/lp.py::compile_lp`), the HiGHS backend (`solvers/highs.py`), and the
-  independent solution verifier (`validation/solution_verifier.py`). 97 tests pass
+  (`formulation/lp.py::compile_lp`), the HiGHS backend (`solvers/highs.py`), the
+  independent solution verifier (`validation/solution_verifier.py`), and (as of
+  2026-09-04) T11's result/attribution/explainability layer (`reporting/`;
+  `specs/0002-result-attribution-explainability/`). 107 tests pass
   (`pytest tests/ -q`, with the `highs` extra installed).
-- **Not yet started:** no `reporting`/`attribution` module and no CLI/facade module
-  exist under `src/inventory_optimizer/` yet (confirmed by directory listing) —
-  T11 and T12 below are real gaps, not just unmarked completions.
+- **Not yet started:** no CLI/facade module exists under `src/inventory_optimizer/`
+  yet (confirmed by directory listing) — T12 below is a real gap, not just an
+  unmarked completion.
 
 ## Environment
 
 ```bash
 python3 -m venv .venv
 .venv/bin/python -m pip install -e ".[dev,highs,dataframe,agentic]"
-.venv/bin/python -m pytest tests/ -q   # 97 passed, as of this writing
+.venv/bin/python -m pytest tests/ -q   # 107 passed, as of this writing
 ```
 
 See `README.md`'s "Development" section for the extras breakdown. `.venv/` is
@@ -71,40 +73,38 @@ gitignored — recreate it rather than expecting it to be there.
 
 ## Next priorities, in order
 
-### T11 — Result, attribution, and explainability (`01_SPEC.md` §18)
+### T11 — Result, attribution, and explainability (`01_SPEC.md` §18) — done (2026-09-04)
 
-**Spec written 2026-09-04:** `specs/0002-result-attribution-explainability/`
-(`spec.md`, `plan.md`, `tasks.md`) — the first real `NNNN-slug` SDD spec in
-this repo, shaped with `agents/optimization/problem_formulation/` and
+`specs/0002-result-attribution-explainability/` (`spec.md`, `plan.md`,
+`tasks.md`) — the first real `NNNN-slug` SDD spec in this repo, shaped with
+`agents/optimization/problem_formulation/` and
 `agents/optimization/solver_diagnostics_sensitivity/` per the routing table
-below. Status: Draft, not yet implemented — the `reporting/` package and the
-`domain/results.py` section models described in `plan.md` do not exist yet.
-Read that spec chain before starting `T-001`; the summary below is the
-pre-spec framing, kept for history.
+below. All eleven tasks (`T-001`-`T-011`) are done: the `reporting/` package
+(`types.py`, `attribution.py`, `explanations.py`, `shadow_prices.py`,
+`result_builder.py`), the thirteen new `domain/results.py` section models, and
+10 new tests under `tests/unit/reporting/` (107 total, all passing).
 
-Nothing under `src/inventory_optimizer/` currently builds the
-`OptimizationResult` reporting layer. Needed, per §18:
+What shipped, per §18: a full `OptimizationResult` assembly
+(`reporting.result_builder.build_optimization_result`) covering all fifteen
+§18.1 sections (Schedules/Collateral/Sources are explicit `None` — no upstream
+domain model exists yet for them); objective attribution
+(`reporting.attribution.attribute_objective`) that independently recomputes
+each component's unscaled USD value and hard-fails
+(`AttributionMismatchError`) if the sum disagrees with the solver's own
+claimed objective; decision explanations (`reporting.explanations.explain_routes`)
+deriving 3 of the 24 `ReasonCode` values so far (`HIGHER_NET_FEE`,
+`DEMAND_CAP_BINDING`, `ELASTICITY_REDUCED_DEMAND`; the remaining 21 wait on
+their owning constraint components — see the spec's tasks.md Follow-ups); and
+LP shadow prices (`reporting.shadow_prices.build_shadow_prices`), correctly
+omitted whenever the backend reports no dual (MIP solves).
 
-- The full `OptimizationResult` shape (§18.1): identity, status, allocations,
-  balances, economics, demand, schedules, collateral, desk, sources, constraints,
-  solver, verification, warnings, platform — most of the underlying data already
-  exists in `CompiledProblem`/`SolverResult`/`verify_solution`'s output; T11 is
-  mainly the assembly and shaping layer.
-- Objective attribution (§18.2): reconstruct each objective component's unscaled
-  USD value from domain allocations; sum must match the verified solver objective
-  within tolerance. `components/objective_terms/{fee_revenue,transition_cost}.py`
-  already compute these terms for the LP — T11 needs to expose them per-component
-  in the result rather than only as compiled coefficients.
-- Decision explanations (§18.3): the ~24 reason codes listed there
-  (`HIGHER_NET_FEE`, `DEMAND_CAP_BINDING`, `INVENTORY_SCARCE`, ...), derived from
-  coefficients/bounds/slacks/deltas — no generated prose.
-- Shadow prices (§18.4): report LP duals when the backend provides them and
-  verification passes; never label them as MIP shadow prices.
-- Traceability rows to close: `LP-007`, `LP-008`, `VER-001` (fully), `VER-002`,
-  `VER-005`, `VER-006` in `specs/spec002/TRACEABILITY.md` — all currently
-  `SPECIFIED`, not `IMPLEMENTED`.
+`specs/spec002/TRACEABILITY.md` rows `LP-007`, `VER-001`, `VER-002`,
+`VER-005`, `VER-006` moved `SPECIFIED` → `IMPLEMENTED`. `LP-008` was
+**not** closed — the original spec draft incorrectly listed it; it needs the
+joint collateral mode (T32, not started), not just T11, and was corrected in
+`spec.md`'s Goals section before merge.
 
-### T12 — Public API and CLI (`01_SPEC.md` §17)
+### T12 — Public API and CLI (`01_SPEC.md` §17) — next up
 
 - The stable facade (§17.1): `InventoryOptimizer` class + `load_config(...)`,
   a thin wrapper over the already-implemented validators / elasticity service /
@@ -167,20 +167,15 @@ genuinely additive rather than redundant:
 
 ### How to actually start
 
-**Done (2026-09-04):** `specs/0002-result-attribution-explainability/` is
-written — `spec.md`/`plan.md`/`tasks.md`, shaped with `problem_formulation`
-and `solver_diagnostics_sensitivity`, indexed in `specs/README.md`, tracked by
-the `spec`/`spec-index` gates. It closes the "T11 has no SDD spec" gap this
-section used to call out.
-
-What's left is Implement → Verify: work `tasks.md`'s `T-001` through `T-011`
-in order (they're already ordered and each cites its `REQ-*`/`AC-*`), backed
-by `testing_validation` for the AC tests, then flip
-`specs/spec002/TRACEABILITY.md`'s `LP-007`, `LP-008`, `VER-001`, `VER-002`,
-`VER-005`, `VER-006` rows to `IMPLEMENTED` (`tasks.md`'s `T-010`) and update
-this file's T11 entry to done (`T-011`). Once that ships, repeat the same
-"write the spec first" pattern for T12 (public API/CLI) — see the table
-above for which agent covers each of its pieces.
+**T11 done (2026-09-04)** — see above. Repeat the same "write the spec
+first" pattern for T12 next: invoke `workflow_orchestrator`, let it route to
+`problem_formulation` for turning §17's `InventoryOptimizer`/`load_config`/
+service-protocol/CLI shape into `REQ-*`/`AC-*` rows and `testing_validation`
+for the AC tests, and write a real `specs/0003-*` directory (not just prose
+here) so it's tracked by the same `spec`/`spec-index` gates T11's spec was.
+`reporting.result_builder.build_optimization_result` (T11) is T12's primary
+dependency — its facade should call it directly rather than re-deriving any
+of the assembly logic.
 
 ## Open items for the next agent (not yet resolved)
 

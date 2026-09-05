@@ -4,8 +4,9 @@
 
 Reinvestment income (``r_j * h_j``) is a separate, optional term
 (``objective_terms/reinvestment.py``, not yet built -- Section 28: "Cash collateral reinvestment:
-Optional linear route economics, not a decision"). ``attribute()`` raises until T11 defines the
-verified-solution shape it reconstructs from.
+Optional linear route economics, not a decision"). ``attribute()`` (T11) recomputes the same
+per-route coefficient and multiplies it by the *solved* quantity, independent of the LP's own
+compiled objective array (Section 18.2).
 """
 
 from __future__ import annotations
@@ -15,12 +16,18 @@ from collections.abc import Sequence
 from inventory_optimizer.components.decorators import objective_component
 from inventory_optimizer.config.models import FormulationConfig
 from inventory_optimizer.domain.enums import DayCountBasis, Formulation
+from inventory_optimizer.domain.inventory import SecurityInventory
+from inventory_optimizer.domain.loans import LoanRoute
 from inventory_optimizer.exceptions import ValidationIssue
 from inventory_optimizer.formulation.context import BuildContext
 from inventory_optimizer.formulation.indexes import VariableKey
 from inventory_optimizer.formulation.sparse_builder import SparseBuilder
+from inventory_optimizer.reporting.types import ObjectiveAttribution, VerifiedSolution
 
 _DAY_COUNT_DIVISOR = {DayCountBasis.ACT_360: 360.0, DayCountBasis.ACT_365: 365.0}
+
+COMPONENT_NAME = "fee_revenue"
+COMPONENT_VERSION = "1"
 
 
 def _day_count_fraction(formulation_config: FormulationConfig) -> float:
@@ -28,9 +35,21 @@ def _day_count_fraction(formulation_config: FormulationConfig) -> float:
     return formulation_config.planning_horizon_days / divisor
 
 
+def fee_revenue_coefficient(
+    route: LoanRoute, inventory: SecurityInventory, formulation_config: FormulationConfig
+) -> float:
+    """The per-share ``q_j`` coefficient (Section 11.12). Shared by ``contribute()``,
+    ``attribute()``, and ``reporting.explanations`` so all three agree on one formula rather than
+    each re-deriving it."""
+    tau = _day_count_fraction(formulation_config)
+    return inventory.price_usd * tau * (
+        route.fee_rate * route.revenue_share - route.variable_cost_rate
+    )
+
+
 @objective_component(
-    name="fee_revenue",
-    version="1",
+    name=COMPONENT_NAME,
+    version=COMPONENT_VERSION,
     formulations={Formulation.LP, Formulation.MIP, Formulation.QP},
 )
 class FeeRevenueTerm:
@@ -38,13 +57,25 @@ class FeeRevenueTerm:
         return ()
 
     def contribute(self, context: BuildContext, builder: SparseBuilder) -> None:
-        tau = _day_count_fraction(context.config.formulation)
         for route in context.request.routes:
             inventory = context.inventory_by_id[route.inventory_id]
-            coefficient = inventory.price_usd * tau * (
-                route.fee_rate * route.revenue_share - route.variable_cost_rate
-            )
+            coefficient = fee_revenue_coefficient(route, inventory, context.config.formulation)
             builder.add_objective_coefficient(VariableKey("q", route.route_id), coefficient)
 
-    def attribute(self, solution: object) -> object:
-        raise NotImplementedError("objective attribution lands with T11")
+    def attribute(self, solution: VerifiedSolution) -> ObjectiveAttribution:
+        context = solution.context
+        total = 0.0
+        baseline = 0.0
+        for route in context.request.routes:
+            inventory = context.inventory_by_id[route.inventory_id]
+            coefficient = fee_revenue_coefficient(route, inventory, context.config.formulation)
+            q = solution.primal_at(VariableKey("q", route.route_id))
+            total += coefficient * q
+            baseline += coefficient * route.current_quantity_shares
+        return ObjectiveAttribution(
+            component_name=COMPONENT_NAME,
+            component_version=COMPONENT_VERSION,
+            unscaled_value_usd=total,
+            baseline_value_usd=baseline,
+            delta_usd=total - baseline,
+        )

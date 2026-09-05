@@ -1,7 +1,7 @@
 # Spec: Result, objective attribution, and explainability (T11)
 
 - **ID:** 0002-result-attribution-explainability
-- **Status:** Draft
+- **Status:** Approved
 - **Author:** Joshua Lutkemuller (with `problem_formulation` / `solver_diagnostics_sensitivity` agent review)
 - **Approver:**
 - **Last updated:** 2026-09-04
@@ -60,8 +60,12 @@ acted on.
 - Report LP shadow prices (row duals) when the backend supplies them and
   verification passes, labeled with objective scale and sign convention, and
   never surfaced for MIP results (§18.4).
-- Close `LP-007`, `LP-008`, `VER-001`, `VER-002`, `VER-005`, `VER-006` in
-  `specs/spec002/TRACEABILITY.md` from `SPECIFIED` to `IMPLEMENTED`.
+- Close `LP-007`, `VER-001`, `VER-002`, `VER-005`, `VER-006` in
+  `specs/spec002/TRACEABILITY.md` from `SPECIFIED` to `IMPLEMENTED`. `LP-008` stays
+  `SPECIFIED` — it requires the joint collateral mode (T32, not started); this spec
+  only supplies the reconciliation pattern (`attribute_objective`) T32 will extend
+  to a collateral/reinvestment term, so marking it `IMPLEMENTED` here would be a
+  false completeness claim.
 
 ## Non-Goals
 
@@ -76,11 +80,12 @@ acted on.
 - Natural-language rendering of reason codes into prose — §18.3 explicitly
   requires correctness to not depend on prose; a renderer may consume the
   structured `ReasonCode` output later, but is not this spec's job.
-- Collateral, desk, and source economics beyond what the currently-implemented
+- Collateral and source economics beyond what the currently-implemented
   components (`fee_revenue`, `transition_cost`) and baseline domain contracts
   already produce — sections without an upstream data source yet (e.g.
-  reinvestment, collateral haircut/margin) are populated as empty/`None` per
-  their §18.1 contents, not fabricated.
+  reinvestment, collateral haircut/margin) are populated as `None` per their
+  §18.1 contents, not fabricated. (Desk is populated for real — `DeskContext`
+  and `config.desk.enabled_components` already exist.)
 
 ## Requirements
 
@@ -115,7 +120,7 @@ acted on.
 | AC-007 | Given a route with no material allocation delta, when explanations are derived, then no reason codes are attached (explanations are only produced for material changes, not every route). | REQ-004 |
 | AC-008 | Given a solved continuous-LP golden fixture with `SolverResult.dual` populated and verification passed, when shadow prices are built, then every binding row has a labeled dual value traceable via `RowIndex` to its domain constraint. | REQ-005 |
 | AC-009 | Given a solved fixture with integer variables present (`SolverResult.dual is None`), when shadow prices are built, then the result's shadow-price section is empty/`None`, never a stale or fabricated value. | REQ-006 |
-| AC-010 | Given AC-001 through AC-009 pass, when `specs/spec002/TRACEABILITY.md` is updated, then `LP-007`, `LP-008`, `VER-001`, `VER-002`, `VER-005`, `VER-006` read `IMPLEMENTED` with an evidence pointer to the tests above. | REQ-001-REQ-006 |
+| AC-010 | Given AC-001 through AC-009 pass, when `specs/spec002/TRACEABILITY.md` is updated, then `LP-007`, `VER-001`, `VER-002`, `VER-005`, `VER-006` read `IMPLEMENTED` (`LP-008` stays `SPECIFIED`, pending T32) with an evidence pointer to the tests above. | REQ-001-REQ-006 |
 
 ## Data & Dependencies
 
@@ -145,11 +150,12 @@ acted on.
   tolerance already treats near-zero deltas — i.e. changes below
   `DEFAULT_TOLERANCE` are not "material." `plan.md` should confirm this
   explicitly rather than inventing a second threshold.
-- Open question: whether `OptimizationResult`'s currently-empty sections
-  (Collateral, Schedules, Sources, Desk) should be typed as `None` or as
-  empty-but-present nested models when their upstream data doesn't exist yet.
-  `plan.md` decides; either choice must keep `extra="forbid"` on the frozen
-  model.
+- Open question (resolved in `plan.md`): whether `OptimizationResult`'s
+  sections with no upstream data yet (Collateral, Schedules, Sources — Desk
+  turned out to have upstream data already, via `DeskContext` and
+  `config.desk.enabled_components`) should be typed as `None` or as
+  empty-but-present nested models. Resolved as `None`; either choice keeps
+  `extra="forbid"` on the frozen model.
 - Open question: exact exception type/name for AC-003's mismatch case
   (`AttributionMismatchError` is a placeholder name here) — `plan.md`/`tasks.md`
   fix it.

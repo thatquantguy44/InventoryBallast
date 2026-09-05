@@ -43,3 +43,21 @@ class ConfigurationError(Exception):
 
 class RegistrationError(Exception):
     """Raised for duplicate or malformed component/problem-family registration."""
+
+
+class AttributionMismatchError(Exception):
+    """Raised when objective attribution's independently recomputed sum disagrees with the
+    solver's own claimed objective beyond tolerance (Section 18.2; VER-002). Never caught and
+    downgraded to a warning -- a mismatch means either a component's ``attribute()`` drifted from
+    its ``contribute()``, or the solver result itself is not what it claims to be."""
+
+    def __init__(
+        self, *, attributed_sum: float, claimed_objective: float, tolerance: float
+    ) -> None:
+        self.attributed_sum = attributed_sum
+        self.claimed_objective = claimed_objective
+        self.tolerance = tolerance
+        super().__init__(
+            f"objective attribution sum {attributed_sum!r} disagrees with solver objective "
+            f"{claimed_objective!r} by more than tolerance {tolerance!r}"
+        )
