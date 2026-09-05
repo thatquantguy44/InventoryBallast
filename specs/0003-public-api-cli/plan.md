@@ -1,9 +1,9 @@
 # Plan: Public API and CLI facade (T12)
 
 - **Spec:** 0003-public-api-cli (`spec.md`)
-- **Status:** Draft
-- **Author:** Joshua Lutkemuller, CFA (draft prepared by Claude Code for review)
-- **Last updated:** 2026-09-04
+- **Status:** Approved
+- **Author:** Joshua Lutkemuller, CFA (drafted by Claude Code, implemented as described below)
+- **Last updated:** 2026-09-05
 
 > HOW. This plan requires an approved `spec.md`. Every requirement in the spec
 > must appear in the traceability matrix below.
@@ -332,3 +332,28 @@ implemented (tracked as T-013/T-014 in `tasks.md`, not performed by this draft).
 - Whether the CLI should support reading `--request`/`--config` from stdin (`-`) as well as a file
   path — §17.3's text only shows file paths; left out of this first cut, callable as a follow-up if
   a real workflow needs it.
+
+## Deviations Discovered During Implementation
+
+Two things this draft did not anticipate, surfaced only by actually wiring the facade end to end
+and writing the AC tests — both fixed rather than worked around, per this repo's "deviations noted,
+not hidden" convention (see T11's own `LP-008`/`DeskSummary` corrections for precedent):
+
+- **`OptimizationRequest.config_overrides`/`metadata` and `AllocationRecord.explanation_evidence`
+  could not be serialized at all.** Their `Field(default_factory=lambda: MappingProxyType({}))`
+  default (`domain/requests.py`, `domain/results.py` — the latter from T11) produces a
+  `mappingproxy` object pydantic v2 has no serializer for; `_hash_request`'s first call to
+  `request.model_dump(mode="json")` raised `PydanticSerializationError` immediately. Fixed with a
+  `@field_serializer` on each affected field, converting to a plain `dict` only at the
+  serialization boundary — the in-memory immutability the original `MappingProxyType` default was
+  chosen for is unaffected; only `model_dump`/`model_dump_json` output changes (from "crashes" to
+  "works"). This touches two files (`domain/requests.py`, `domain/results.py`) outside this spec's
+  originally-scoped "wrap, don't reinvent" file list, but the bug blocked REQ-003 entirely and
+  predates T12 — it simply had no caller until now.
+- **`SolverDiagnostics.runtime_seconds` is not deterministic**, even given the identical E1 request
+  solved twice back to back: it is `HighsBackend.solve()`'s measured wall-clock time
+  (`time.perf_counter()`-based), which genuinely varies run to run while `iterations` and
+  `termination_reason` do not. `spec.md`'s `NFR-001`/`NFR-004` and `AC-002`/`AC-011` were corrected
+  in place to exclude this one field from the determinism claim, discovered while writing
+  `test_optimize_is_deterministic_modulo_identity_fields` (it failed on the first run, with
+  `runtime_seconds` as the only differing field).

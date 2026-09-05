@@ -23,7 +23,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from types import MappingProxyType
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_serializer
 
 from inventory_optimizer.domain.enums import ProblemFamily, ReasonCode, SolverStatus
 from inventory_optimizer.platform.context import PlatformInvocationContext
@@ -59,6 +59,12 @@ class AllocationRecord(BaseModel):
     explanation_evidence: Mapping[str, float | str] = Field(
         default_factory=lambda: MappingProxyType({})
     )
+
+    @field_serializer("explanation_evidence")
+    def _serialize_evidence(self, value: Mapping[str, float | str]) -> dict[str, float | str]:
+        """``MappingProxyType`` (this field's own default) has no pydantic-core serializer --
+        ``model_dump``/``model_dump_json`` raise ``PydanticSerializationError`` on it otherwise."""
+        return dict(value)
 
 
 class BalanceRecord(BaseModel):

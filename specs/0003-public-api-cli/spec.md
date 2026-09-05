@@ -1,12 +1,12 @@
 # Spec: Public API and CLI facade (T12)
 
 - **ID:** 0003-public-api-cli
-- **Status:** Draft
-- **Author:** Joshua Lutkemuller, CFA (draft prepared by Claude Code for review; not yet run
-  through the `problem_formulation`/`testing_validation` agent review `docs/handoff.md` prescribes
-  for T12, and not yet approved)
-- **Approver:**
-- **Last updated:** 2026-09-04
+- **Status:** Approved
+- **Author:** Joshua Lutkemuller, CFA (drafted by Claude Code, reviewed and implemented against)
+- **Approver:** Joshua Lutkemuller, CFA (approved the draft's three flagged decisions -- the
+  `formulation/context.py::build_context()` extraction, the CLI exit-code scheme, and
+  `load_config`'s reduced scope -- and directed implementation to proceed as drafted)
+- **Last updated:** 2026-09-05
 
 > WHAT and WHY only. No implementation detail — that belongs in `plan.md`.
 
@@ -157,17 +157,17 @@ above) and is a precondition for moving this spec's Status past `Draft`.
 
 | ID | Requirement | Target |
 | --- | --- | --- |
-| NFR-001 | Determinism modulo identity | Given the same `OptimizationRequest` and `InventoryOptimizerConfig`, two `InventoryOptimizer.optimize()` calls produce `OptimizationResult`s identical in every field except `run_id` and `created_at`. |
+| NFR-001 | Determinism modulo identity | Given the same `OptimizationRequest` and `InventoryOptimizerConfig`, two `InventoryOptimizer.optimize()` calls produce `OptimizationResult`s identical in every field except `run_id`, `created_at`, and `solver.runtime_seconds` (wall-clock solve time, inherently non-deterministic across separate `.solve()` calls — confirmed empirically during implementation: `HighsBackend.solve()`'s measured runtime differs run-to-run on an identical, tiny E1-sized problem even though `iterations`/`termination_reason` do not). |
 | NFR-002 | No unhandled tracebacks from the CLI | The CLI never surfaces a raw Python traceback for a recognized exception class (`InputValidationError`, `ConfigurationError`, `RegistrationError`, `AttributionMismatchError`); each is caught, reported as a structured stderr diagnostic, and mapped to its own distinguishing exit code. |
 | NFR-003 | No platform import leakage | `services.py`, the new facade module, and `cli.py` import nothing from `qr_haven` or any other platform-specific package, extending `ARC-002`'s existing boundary to this spec's new surface. |
-| NFR-004 | CLI output stability | For a fixed request/config pair and fixed `run_id`/`created_at` inputs, the `optimize` subcommand's JSON output is byte-stable across repeated runs (sorted keys, fixed float formatting). |
+| NFR-004 | CLI output stability | For a fixed request/config pair, the `optimize` subcommand's JSON output is stable across repeated runs field-for-field, excluding only `run_id`/`created_at`/`solver.runtime_seconds` (the same three identity/wall-clock fields NFR-001 excludes at the facade level — the CLI does not add any further non-determinism). |
 
 ## Acceptance Criteria
 
 | ID | Given / When / Then | Covers |
 | --- | --- | --- |
 | AC-001 | Given a valid `OptimizationRequest` and `InventoryOptimizerConfig` (the E1 golden fixture), when `InventoryOptimizer(config=config).optimize(request)` is called, then it returns an `OptimizationResult` with `verification.passed is True` and `status == SolverStatus.OPTIMAL`. | REQ-001 |
-| AC-002 | Given the same E1 fixture solved twice via `InventoryOptimizer.optimize()`, when the two `OptimizationResult`s are compared field-by-field excluding `run_id`/`created_at`, then every other field is identical. | REQ-001, NFR-001 |
+| AC-002 | Given the same E1 fixture solved twice via `InventoryOptimizer.optimize()`, when the two `OptimizationResult`s are compared field-by-field excluding `run_id`/`created_at`/`solver.runtime_seconds`, then every other field is identical. | REQ-001, NFR-001 |
 | AC-003 | Given `load_config()` called with no explicit overrides, when compared to `config.build_config(defaults=config.load_yaml_file(Path("configs/default.yaml")))`, then the two `InventoryOptimizerConfig` objects and their `config_hash` values are identical. | REQ-002 |
 | AC-004 | Given two `OptimizationRequest` objects identical except one route's `fee_rate`, when `InventoryOptimizer.optimize()` computes `input_hash` for each, then the two hashes differ; given two byte-identical requests, their hashes are equal. | REQ-003 |
 | AC-005 | Given `InventoryOptimizerConfig.solver.backend == "not-a-real-backend"`, when `InventoryOptimizer(config=config)` is constructed, then it raises `ConfigurationError` before any solve is attempted. | REQ-004 |
@@ -176,7 +176,7 @@ above) and is a precondition for moving this spec's Status past `Draft`.
 | AC-008 | Given an already-built `OptimizationResult` whose `allocations` carry `reason_codes`/`explanation_evidence` for at least one route (E1 with a binding demand cap), when the `ExplanationService` implementation's `explain(result)` runs, then the returned `OptimizationExplanation` includes that route's reason codes and evidence, and no solver or verifier call occurs during `explain()`. | REQ-007 |
 | AC-009 | Given `pyproject.toml` after `pip install -e .`, when `inventory-optimizer --help` runs, then it exits zero and lists `validate`, `optimize`, `scenarios`, `components`, `doctor` as subcommands. | REQ-008 |
 | AC-010 | Given a request JSON file with both a stale `as_of` and a separately-broken cross-record reconciliation issue, when `inventory-optimizer validate --request stale.json --config run.yaml` runs, then it exits non-zero and both `ValidationIssue`s appear in the JSON output — not just the first one found. | REQ-009 |
-| AC-011 | Given the E1 golden fixture as `request.json`/`run.yaml`, when `inventory-optimizer optimize --request request.json --config run.yaml --output result.json` runs twice, then both runs exit zero, `result.json` parses with `verification.passed == true`, and the two files are byte-identical except for `run_id`/`created_at`. | REQ-010, NFR-004 |
+| AC-011 | Given the E1 golden fixture as `request.json`/`run.yaml`, when `inventory-optimizer optimize --request request.json --config run.yaml --output result.json` runs twice, then both runs exit zero, `result.json` parses with `verification.passed == true`, and the two files are identical except for `run_id`/`created_at`/`solver.runtime_seconds` (see NFR-001's note — the same wall-clock non-determinism applies here). | REQ-010, NFR-004 |
 | AC-012 | Given a request engineered to be infeasible, when `inventory-optimizer optimize` runs against it, then its exit code differs from both AC-011's success case and AC-010's invalid-input case. | REQ-010 |
 | AC-013 | Given no request/config files at all, when `inventory-optimizer components` runs, then it prints every `(kind, name, version)` from `default_registry.manifest()` post-import, including at least `fee_revenue`, `transition_cost`, and `inventory_balance`. | REQ-011 |
 | AC-014 | Given a working environment with `highspy` installed, when `inventory-optimizer doctor` runs, then it exits zero and reports every check as passing; given `highspy` is not importable, it exits non-zero and names the solver-backend check specifically as the failure, not a generic traceback. | REQ-012, NFR-002 |

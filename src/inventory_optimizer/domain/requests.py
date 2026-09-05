@@ -16,7 +16,7 @@ from collections.abc import Mapping
 from datetime import date
 from types import MappingProxyType
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, JsonValue
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, JsonValue, field_serializer
 
 from inventory_optimizer.domain.demand import DemandForecast
 from inventory_optimizer.domain.enums import ProblemFamily
@@ -58,3 +58,11 @@ class OptimizationRequest(BaseModel):
     utilization_policies: tuple[UtilizationPolicy, ...] = ()
     config_overrides: Mapping[str, JsonValue] = Field(default_factory=lambda: MappingProxyType({}))
     metadata: Mapping[str, str] = Field(default_factory=lambda: MappingProxyType({}))
+
+    @field_serializer("config_overrides", "metadata")
+    def _serialize_immutable_mapping(self, value: Mapping[str, object]) -> dict[str, object]:
+        """``MappingProxyType`` (this class's own default) has no pydantic-core serializer --
+        ``model_dump``/``model_dump_json`` raise ``PydanticSerializationError`` on it otherwise.
+        Converting to a plain ``dict`` only at the serialization boundary keeps the in-memory
+        immutability guarantee the default was chosen for."""
+        return dict(value)

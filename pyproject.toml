@@ -18,6 +18,9 @@ dependencies = [
   "pyyaml>=6.0",
 ]
 
+[project.scripts]
+inventory-optimizer = "inventory_optimizer.cli:main"
+
 [project.optional-dependencies]
 highs = [
   "highspy>=1.7",

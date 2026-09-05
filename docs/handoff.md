@@ -44,28 +44,31 @@ per `specs/spec002/00_PLAN.md`'s own "Handoff Order":
 spec, copied in as a worked example of the SDD chain, not part of InventoryBallast's
 scope.
 
-## Current state (verified 2026-09-04)
+## Current state (verified 2026-09-05)
 
 Per `specs/spec002/00_PLAN.md`'s status line and `TRACEABILITY.md`:
 
-- **Implemented and tested:** T01-T11, T34, and the `securities_lending_inventory`
+- **Implemented and tested:** T01-T12, T34, and the `securities_lending_inventory`
   baseline of T35 — package scaffold, domain contracts, config, elasticity
   (`elasticity/`), sparse LP formulation (`formulation/`), the baseline LP compiler
   (`formulation/lp.py::compile_lp`), the HiGHS backend (`solvers/highs.py`), the
-  independent solution verifier (`validation/solution_verifier.py`), and (as of
-  2026-09-04) T11's result/attribution/explainability layer (`reporting/`;
-  `specs/0002-result-attribution-explainability/`). 107 tests pass
-  (`pytest tests/ -q`, with the `highs` extra installed).
-- **Not yet started:** no CLI/facade module exists under `src/inventory_optimizer/`
-  yet (confirmed by directory listing) — T12 below is a real gap, not just an
-  unmarked completion.
+  independent solution verifier (`validation/solution_verifier.py`), T11's
+  result/attribution/explainability layer (`reporting/`;
+  `specs/0002-result-attribution-explainability/`), and (as of 2026-09-05) T12's
+  public API facade + CLI (`facade.py`, `services.py`, `cli.py`;
+  `specs/0003-public-api-cli/`). 125 tests pass (`pytest tests/ -q`, with the
+  `highs` extra installed), plus a real `pip install -e .` console script
+  (`inventory-optimizer`).
+- **Not yet started:** the scenario engine (T13-T14, Phase 2) — see "Next
+  priorities" below.
 
 ## Environment
 
 ```bash
 python3 -m venv .venv
 .venv/bin/python -m pip install -e ".[dev,highs,dataframe,agentic]"
-.venv/bin/python -m pytest tests/ -q   # 107 passed, as of this writing
+.venv/bin/python -m pytest tests/ -q   # 125 passed, as of this writing
+inventory-optimizer doctor              # sanity-check the installed console script
 ```
 
 See `README.md`'s "Development" section for the extras breakdown. `.venv/` is
@@ -104,29 +107,52 @@ omitted whenever the backend reports no dual (MIP solves).
 joint collateral mode (T32, not started), not just T11, and was corrected in
 `spec.md`'s Goals section before merge.
 
-### T12 — Public API and CLI (`01_SPEC.md` §17) — next up
+### T12 — Public API and CLI (`01_SPEC.md` §17) — done (2026-09-05)
 
-- The stable facade (§17.1): `InventoryOptimizer` class + `load_config(...)`,
-  a thin wrapper over the already-implemented validators / elasticity service /
-  formulation compiler / solver backend / verifier — plus the not-yet-built
-  reporter from T11.
-- Service protocols (§17.2): `OptimizationService`, `ScenarioService`,
-  `ExplanationService`.
-- CLI (§17.3): `inventory-optimizer validate|optimize|scenarios|components|doctor`
-  — no `[project.scripts]` entry exists yet in `pyproject.toml` for this (compare
-  the QuantSmith scaffold's own `quantsmith-*` console scripts for the pattern).
-- Note: §17.4 (QR Haven platform adapter) and §17.5 (platform invocation
-  contract) are QR-Haven-side / already-partially-implemented (`platform/`
-  package here provides the invocation context); the adapter itself
-  (`src/qr_haven/integrations/inventory_optimizer.py`) lives in `QR-Haven`, not
-  here, and is out of scope for this repo.
+`specs/0003-public-api-cli/` (`spec.md`, `plan.md`, `tasks.md`) — drafted by a
+background agent following T11's spec as its template, reviewed, and approved
+(the draft's three flagged decisions — the `formulation/context.py::
+build_context()` extraction, the CLI exit-code scheme, and `load_config`'s
+reduced scope — were signed off before implementation). All fourteen tasks
+(`T-001`-`T-014`) are done: `services.py` (`OptimizationService`,
+`ExplanationService`, `ExplanationServiceImpl`), `facade.py`
+(`InventoryOptimizer`, `load_config`), `cli.py` (`validate|optimize|scenarios|
+components|doctor`), a new `formulation/context.py::build_context()` (a
+same-behavior extraction `compile_lp` now calls internally), the
+`inventory-optimizer` console script (`pyproject.toml`'s `[project.scripts]`),
+and 18 new tests (`tests/unit/test_facade.py`, `test_services.py`, `test_cli.py`,
+`tests/golden/test_e1_cli_end_to_end.py` — 125 total, all passing).
 
-### After T11/T12
+Two real bugs surfaced only by wiring the facade end to end and are fixed, not
+worked around (see `specs/0003-public-api-cli/plan.md`'s "Deviations Discovered
+During Implementation" for the full account): `OptimizationRequest`'s and T11's
+`AllocationRecord`'s `MappingProxyType`-defaulted fields could not be
+serialized at all (`domain/requests.py`, `domain/results.py` now carry a
+`@field_serializer` each); and `SolverDiagnostics.runtime_seconds` is
+genuinely non-deterministic run-to-run (wall-clock solve time), which
+corrected `spec.md`'s determinism claims (`NFR-001`/`NFR-004`/`AC-002`/`AC-011`)
+rather than the code.
 
-`00_PLAN.md`'s "Implementation Sequence" continues with Phase 2 (scenario
-engine, T13-T14), Phase 3 (MIP business rules), Phase 4 (QP), Phase 5
+`specs/spec002/TRACEABILITY.md`'s `PLT-002` row gained an evidence pointer to
+`tests/golden/test_e1_cli_end_to_end.py` but stays `SPECIFIED` — its `G2C`
+gate is a cross-cutting platform-ownership release approval shared with
+`PLT-001`, `PLT-003`-`PLT-006` (all T17/T34-owned, none of which this repo
+builds), not something T12 grants unilaterally.
+
+### T13-T14 — Scenario engine (`01_SPEC.md` §13; Phase 2) — next up
+
+Not started. `00_PLAN.md`'s "Implementation Sequence" Phase 2: scenario
+overlays that never mutate the baseline (`SCN-001`), trades that alter supply
+only when effective/settled/eligible (`SCN-002`), batch vs. isolated scenario
+equivalence (`SCN-003`), and desk-typed scenario events (`SCN-004`) —
+`specs/spec002/TRACEABILITY.md`'s `SCN-001`-`SCN-004` rows are all still
+`SPECIFIED`. This is also what unblocks `services.ScenarioService` and the
+CLI's `scenarios` subcommand, both deliberately left undefined/stubbed by T12
+pending this work (see `specs/0003-public-api-cli/tasks.md`'s Follow-ups).
+
+After Phase 2: Phase 3 (MIP business rules), Phase 4 (QP), Phase 5
 (nonlinear/multi-period research), the Bloomberg-enriched realism workstream, and
-the agency/prime desk workstream — see that file for exit gates on each.
+the agency/prime desk workstream — see `00_PLAN.md` for exit gates on each.
 
 ## Using QuantSmith to build the rest of this repo
 
@@ -137,8 +163,8 @@ beyond just the constitution/gates already wired into CI.
 
 | Next task | QuantSmith agent |
 | --- | --- |
-| T11 — shadow prices, solver diagnostics, reason codes | `agents/optimization/solver_diagnostics_sensitivity/` |
-| T12 and later phases — turning an ambiguous next decision into variables/constraints/ACs before coding | `agents/optimization/problem_formulation/` |
+| T11 (done) — shadow prices, solver diagnostics, reason codes | `agents/optimization/solver_diagnostics_sensitivity/` |
+| T12 (done) / T13-T14 and later phases — turning an ambiguous next decision into variables/constraints/ACs before coding | `agents/optimization/problem_formulation/` |
 | Phase 3 — MIP business rules (lot sizes, all-or-none, cardinality) | `agents/optimization/mixed_integer_optimization/` |
 | Collateral workstream (T30-T32: haircuts, capacity, joint mode) | `agents/optimization/collateral_margin_optimization/` — named for exactly this problem |
 | General LP review as more constraint components get added | `agents/optimization/linear_programming/` |
@@ -153,29 +179,47 @@ replenishment), not securities-lending inventory. Don't route there.
 ### The `quantsmith` package (the `agentic` extra)
 
 Narrower fit, since `inventory_optimizer` already has its own purpose-built
-HiGHS/`CompiledProblem` stack — not a replacement for it. Two places it's
-genuinely additive rather than redundant:
+HiGHS/`CompiledProblem` stack — not a replacement for it. Verified concretely
+(2026-09-05) by reading the installed package's own source
+(`.venv/lib/python*/site-packages/quantsmith/`, pinned commit
+`3951654f56c995465b4c090f39eeb34f8c9671ff`):
 
-- `quantsmith.pipelines.solve_milp` / `solve_lp` as an independent, dependency-free
-  reference solver to cross-check results against once Phase 3 (MIP) lands — a
-  second implementation is a good input to a `solver_diagnostics_sensitivity`
-  review, not something to import into the engine itself.
-- `quantsmith.pipelines.DashboardSpec` / `render_streamlit` / `write_xlsx` if a
-  quick allocation/economics/utilization dashboard over `OptimizationResult` is
-  wanted once T11 exists — same governed-dashboard pattern QuantSmith uses for
-  its own examples, no need to hand-roll one.
+- **CLI pattern (already used for T12):** skip `quantsmith-sec-lending`'s CLI
+  (`quantsmith.quant.agentic_quant.cli.sec_lending`) — it's a single-command
+  `argparse` demo with no subcommands and no structured error handling.
+  `quantsmith-memory`'s CLI (`quantsmith.pipelines.workflow_memory_cli`) is
+  the right template for a multi-verb CLI: `add_subparsers` + one `_cmd_*`
+  handler per verb + a `dispatch` dict + `main(argv) -> int`, with recognized
+  exceptions caught and reported to stderr rather than raised raw. `cli.py`
+  mirrors this convention.
+- `quantsmith.pipelines.optimization_solvers.solve_lp` / `solve_milp` as an
+  independent reference solver to cross-check results against once Phase 3
+  (MIP) lands: real, but pure-Python, dense, and `x >= 0`-only (no arbitrary
+  variable bounds, no sparse matrices) — usable only as a toy oracle for small
+  test fixtures via translation glue (densify, split ranged rows, encode
+  bounds as extra rows), not a production cross-check against our
+  `CompiledProblem`'s sparse/ranged-row/arbitrary-bounds shape.
+- `quantsmith.pipelines.DashboardSpec` / `render_streamlit` / `write_xlsx`:
+  **weaker fit than it looked.** These are metadata-only — a `Panel`
+  references a *named* metric/dataset resolved by a live data-serving
+  endpoint at render time (`render_streamlit`'s generated app calls
+  `pd.read_json(f'{endpoint}?dataset=...')`); `write_xlsx` doesn't even
+  accept a `DashboardSpec` (it takes a separate `ExcelWorkbookPayload` and
+  only writes a header row). Feeding `OptimizationResult`'s actual nested
+  values into this pattern needs real reshaping (flatten sections into rows,
+  define governed metric names, stand up a data-serving layer), not glue
+  code — parked, not adopted.
 
 ### How to actually start
 
-**T11 done (2026-09-04)** — see above. Repeat the same "write the spec
-first" pattern for T12 next: invoke `workflow_orchestrator`, let it route to
-`problem_formulation` for turning §17's `InventoryOptimizer`/`load_config`/
-service-protocol/CLI shape into `REQ-*`/`AC-*` rows and `testing_validation`
-for the AC tests, and write a real `specs/0003-*` directory (not just prose
-here) so it's tracked by the same `spec`/`spec-index` gates T11's spec was.
-`reporting.result_builder.build_optimization_result` (T11) is T12's primary
-dependency — its facade should call it directly rather than re-deriving any
-of the assembly logic.
+**T11 and T12 both done** (2026-09-04, 2026-09-05) — see above. Repeat the
+same "write the spec first" pattern for T13-T14 (scenario engine) next:
+invoke `workflow_orchestrator`, let it route to `problem_formulation` for
+turning §13's scenario-overlay semantics into `REQ-*`/`AC-*` rows and
+`testing_validation` for the AC tests, and write a real `specs/0004-*`
+directory tracked by the same `spec`/`spec-index` gates T11's and T12's specs
+were. This is also the gate that unblocks `services.ScenarioService` and the
+CLI's `scenarios` subcommand, both intentionally left undefined by T12.
 
 ## Open items for the next agent (not yet resolved)
 
