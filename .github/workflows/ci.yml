@@ -35,11 +35,11 @@ jobs:
           BASE="${{ github.event.pull_request.base.sha }}"
           [ -n "$BASE" ] || BASE="$(git rev-parse HEAD~1 2>/dev/null || true)"
           QF_DIFF_BASE="$BASE" sh hooks/stages/run-stage.sh leakage
-      - name: Commit authorship policy (advisory — see CLAUDE.md "GitHub posts")
+      - name: Enforce commit authorship (no AI agent as author or co-author)
         run: |
           BASE="${{ github.event.pull_request.base.sha }}"
           if [ -n "$BASE" ]; then RANGE="$BASE..HEAD"; else RANGE="HEAD~1..HEAD"; fi
-          QF_ATTRIB_RANGE="$RANGE" sh hooks/stages/run-stage.sh agent-attribution
+          QF_STAGE_ENFORCE=1 QF_ATTRIB_RANGE="$RANGE" sh hooks/stages/run-stage.sh agent-attribution
       - name: Everything else (advisory)
         run: |
           sh hooks/stages/run-stage.sh

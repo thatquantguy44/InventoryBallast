@@ -119,19 +119,15 @@ the agency/prime desk workstream — see that file for exit gates on each.
   commands were dry-run locally (`sh hooks/stages/run-stage.sh ...`, all passing),
   but it has never executed on actual GitHub Actions since there's no remote yet.
   Verify green on first push.
-- **Attribution policy conflict, unresolved:** `CLAUDE.md`'s "GitHub posts"
-  section (copied from QuantSmith) says to omit AI attribution footers from PR
-  descriptions/comments/replies unconditionally, and the copied
-  `hooks/stages/agent-attribution-check.sh` gate can enforce "no AI agent as
-  author or co-author" on commits. This repo's CI (`gates` job) currently runs
-  that gate **advisory only** — it is not enforced — because the assistant that
-  did this extraction operates under a standing platform instruction to add
-  `Co-Authored-By` trailers to its own commits, which conflicts with this policy.
-  Decide: enforce the gate (and require any agent working here to actually drop
-  the trailers), or drop the gate/policy to match how commits are actually being
-  made. Either way, the local commits made during this extraction/adoption
-  (visible in `git log`) still carry `Co-Authored-By: Claude Sonnet 5` trailers
-  and were made before this decision was resolved.
+- **Attribution policy: adopted and enforced.** `CLAUDE.md`'s "GitHub posts"
+  section says to omit AI attribution footers unconditionally, and CI's `gates`
+  job now runs `hooks/stages/agent-attribution-check.sh` **enforced**
+  (`QF_STAGE_ENFORCE=1`) — it fails the build if a commit carries an AI
+  author/co-author. The commit history was rewritten (`git filter-branch
+  --msg-filter`, local-only, never pushed) to strip the `Co-Authored-By: Claude
+  Sonnet 5` trailers that earlier commits had; author/committer identity on
+  every commit was already the repo owner's own, so only the trailers needed
+  removing. Any agent committing here going forward must not add one.
 - **`specs/spec002/` cross-references:** the 6,500-line spec set was copied
   verbatim from `QR-Haven` and still describes some things in monorepo terms
   (e.g. "the parent repository", the `qr_haven` platform adapter living
