@@ -1,0 +1,9 @@
+# InventoryBallast direct dependencies.
+# Package deps for inventory_optimizer itself live in pyproject.toml; this file
+# pins the agentic scaffold's runtime package.
+#
+# QuantSmith has no tagged releases yet (checked 2026-09-04), so this pins the
+# exact commit that is pushed to origin/main on GitHub, per the adoption guide's
+# "pin a tag/commit for reproducibility" guidance. Re-pin to a tag once QuantSmith
+# cuts one.
+quantsmith @ git+https://github.com/joshualutkemuller/QuantSmith@3951654f56c995465b4c090f39eeb34f8c9671ff

@@ -32,6 +32,16 @@ dev = [
   "mypy>=1.10",
   "types-PyYAML>=6.0",
 ]
+# QuantSmith has no tagged releases yet; pinned to the exact origin/main commit
+# for reproducibility (see requirements.txt). Re-pin to a tag once one exists.
+agentic = [
+  "quantsmith @ git+https://github.com/joshualutkemuller/QuantSmith@3951654f56c995465b4c090f39eeb34f8c9671ff",
+]
+
+[tool.hatch.metadata]
+# Required because the `agentic` extra pins quantsmith to a Git commit
+# (no tagged release exists yet) rather than a PyPI version.
+allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/inventory_optimizer"]
