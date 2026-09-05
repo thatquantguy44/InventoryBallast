@@ -1,15 +1,22 @@
-# inventory_optimizer
+# InventoryBallast (inventory_optimizer)
 
 Portable, solver-neutral securities-lending inventory optimization engine.
 
-This package is specified by `specs/spec002/` in the parent QR Haven repository. It is designed to
-be independently installable and eventually extractable into its own repository: its core modules
-must never import `qr_haven`.
+This package is specified by [`specs/spec002/`](specs/spec002/). Extracted from the
+`QR-Haven` monorepo (`projects/inventory_optimizer/`, preserving its original commit
+history) into its own repository, per Spec002's own design goal of independent
+extractability. Its core modules must never import `qr_haven`.
+
+This repository also adopts the [QuantSmith](https://github.com/joshualutkemuller/QuantSmith)
+agentic scaffold (`instructions/`, `hooks/`, `agents/`, `prompts/`, `templates/`) — see
+`CLAUDE.md` and `docs/handoff.md`.
 
 ## Status
 
-Phase 0A (scaffold + E1-vertical contracts) is in progress. See `specs/spec002/00_PLAN.md` and
-`specs/spec002/01_SPEC.md` in the parent repository for the full specification, and
+T01-T10, T34, and the `securities_lending_inventory` baseline of T35 are implemented and
+tested. T11 (result/attribution) and T12 (public API/CLI) are next — see
+[`docs/handoff.md`](docs/handoff.md) for the current pick-up point, `specs/spec002/00_PLAN.md`
+and `specs/spec002/01_SPEC.md` for the full specification, and
 `specs/spec002/TRACEABILITY.md` for requirement-to-evidence mapping.
 
 ## Development
