@@ -2,8 +2,10 @@
 
 ``InventoryOptimizer.optimize()`` composes five already-implemented, already-tested stages in a
 fixed order -- ``validation.raise_if_invalid`` -> ``formulation.context.build_context`` ->
-``formulation.lp.compile_lp`` -> the configured ``ports.solver.SolverBackend.solve`` ->
-``validation.solution_verifier.verify_solution`` -> ``reporting.result_builder.
+``formulation.lp.compile_lp`` or ``formulation.mip.compile_mip`` (T15; auto-selected via
+``formulation.compiler_support.needs_mip`` -- Section 14.1's discrete triggers route to the MIP
+compiler automatically, no caller action needed) -> the configured ``ports.solver.SolverBackend.
+solve`` -> ``validation.solution_verifier.verify_solution`` -> ``reporting.result_builder.
 build_optimization_result`` -- without re-deriving any of their internal logic. This module is the
 one place in this spec's surface that is intentionally impure (wall clock, ``uuid4``): T11's
 ``build_optimization_result`` deliberately left ``run_id``/``created_at``/``config_hash``/
@@ -31,8 +33,10 @@ from inventory_optimizer.config.models import InventoryOptimizerConfig, SolverCo
 from inventory_optimizer.domain.requests import OptimizationRequest
 from inventory_optimizer.domain.results import OptimizationResult
 from inventory_optimizer.exceptions import ConfigurationError
+from inventory_optimizer.formulation.compiler_support import needs_mip
 from inventory_optimizer.formulation.context import build_context
 from inventory_optimizer.formulation.lp import compile_lp
+from inventory_optimizer.formulation.mip import compile_mip
 from inventory_optimizer.platform.context import PlatformInvocationContext
 from inventory_optimizer.ports.solver import SolverBackend, SolverOptions
 from inventory_optimizer.reporting.result_builder import build_optimization_result
@@ -102,7 +106,11 @@ class InventoryOptimizer:
     ) -> OptimizationResult:
         raise_if_invalid(request, max_staleness_hours=self._config.validation.max_staleness_hours)
         context = build_context(request, self._config)
-        problem = compile_lp(request, self._config)
+        problem = (
+            compile_mip(request, self._config)
+            if needs_mip(request)
+            else compile_lp(request, self._config)
+        )
         result = self._backend.solve(problem, _solver_options_from_config(self._config.solver))
         verification = verify_solution(problem, result)
         solution = VerifiedSolution(

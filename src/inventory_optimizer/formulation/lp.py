@@ -30,19 +30,19 @@ from inventory_optimizer.components.objective_terms import fee_revenue as _fee_r
 from inventory_optimizer.components.objective_terms import (
     transition_cost as _transition_cost,  # noqa: F401,E501
 )
-from inventory_optimizer.components.registry import (
-    ComponentKind,
-    ComponentRegistration,
-    default_registry,
-)
+from inventory_optimizer.components.registry import ComponentKind
 from inventory_optimizer.config.models import InventoryOptimizerConfig
 from inventory_optimizer.domain.enums import Formulation, ObjectiveSense
-from inventory_optimizer.domain.loans import LoanRoute
 from inventory_optimizer.domain.requests import OptimizationRequest
-from inventory_optimizer.exceptions import InputValidationError, RegistrationError, ValidationIssue
+from inventory_optimizer.exceptions import InputValidationError, ValidationIssue
 from inventory_optimizer.formulation.compiled import CompiledProblem
+from inventory_optimizer.formulation.compiler_support import (
+    mip_required_issues,
+    needs_mip,
+    resolve_component,
+    set_route_bounds,
+)
 from inventory_optimizer.formulation.context import build_context
-from inventory_optimizer.formulation.indexes import VariableKey
 from inventory_optimizer.formulation.sparse_builder import SparseBuilder
 
 REQUIRED_CONSTRAINTS: tuple[str, ...] = (
@@ -54,52 +54,23 @@ REQUIRED_CONSTRAINTS: tuple[str, ...] = (
     "counterparty_limit",
 )
 REQUIRED_OBJECTIVES: tuple[str, ...] = ("fee_revenue", "transition_cost")
-_COMPONENT_VERSION = "1"
-
-
-def _resolve_component(name: str) -> tuple[ComponentKind, ComponentRegistration]:
-    for kind in (ComponentKind.CONSTRAINT, ComponentKind.OBJECTIVE):
-        try:
-            return kind, default_registry.get(kind, name, _COMPONENT_VERSION)
-        except RegistrationError:
-            continue
-    raise RegistrationError(
-        f"no constraint or objective component named {name!r} version {_COMPONENT_VERSION!r}"
-    )
-
-
-def _set_route_bounds(builder: SparseBuilder, route: LoanRoute) -> None:
-    """Section 11.5 (route bounds) and 11.3 (transition change bounds).
-
-    ``hard_minimum_quantity_shares`` is a contractual floor that eligibility does not remove; an
-    ineligible route can only shrink toward it (grandfather), never grow. ``upper = max(upper,
-    lower)`` guards against an already-below-floor current quantity inverting the bound -- schedule-
-    driven grandfather/recall timing (Section 11.10) will replace this once T29 lands.
-    """
-    lower = route.hard_minimum_quantity_shares
-    upper = (
-        route.maximum_quantity_shares
-        if route.eligible
-        else min(route.maximum_quantity_shares, route.current_quantity_shares)
-    )
-    upper = max(upper, lower)
-    builder.set_variable_bounds(VariableKey("q", route.route_id), lower=lower, upper=upper)
-
-    inc_upper = max(upper - route.current_quantity_shares, 0.0)
-    dec_upper = max(route.current_quantity_shares - lower, 0.0)
-    builder.set_variable_bounds(VariableKey("inc", route.route_id), lower=0.0, upper=inc_upper)
-    builder.set_variable_bounds(VariableKey("dec", route.route_id), lower=0.0, upper=dec_upper)
 
 
 def compile_lp(request: OptimizationRequest, config: InventoryOptimizerConfig) -> CompiledProblem:
+    if needs_mip(request):
+        # Section 14.1: fail closed rather than silently ignore all_or_none/lot_size_shares/
+        # minimum_active_quantity_shares/maximum_active_routes -- use formulation.mip.compile_mip
+        # (or InventoryOptimizer.optimize(), which routes there automatically) instead.
+        raise InputValidationError(mip_required_issues(request))
+
     context = build_context(request, config)
     builder = SparseBuilder(context.variable_index)
     for route in request.routes:
-        _set_route_bounds(builder, route)
+        set_route_bounds(builder, route)
 
     all_names = (*REQUIRED_CONSTRAINTS, *REQUIRED_OBJECTIVES, *config.desk.enabled_components)
     component_names = list(dict.fromkeys(all_names))
-    resolved = [_resolve_component(name) for name in component_names]
+    resolved = [resolve_component(name) for name in component_names]
     instances = [
         (kind, registration, registration.component_class())
         for kind, registration in resolved

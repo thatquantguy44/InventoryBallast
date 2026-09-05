@@ -41,7 +41,10 @@ class CounterpartyLimit(BaseModel):
 
 
 class UtilizationPolicy(BaseModel):
-    """Floor, target, cap, reserve, and soft/hard semantics for one pool/security scope."""
+    """Floor, target, cap, reserve, cardinality, and soft/hard semantics for one pool/security
+    scope. ``maximum_active_routes`` (Section 14.1, T15) is MIP-only -- present, it forces
+    ``formulation.lp.compile_lp`` to reject the request in favor of ``formulation.mip.compile_mip``
+    (see ``formulation.compiler_support.needs_mip``)."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -58,6 +61,7 @@ class UtilizationPolicy(BaseModel):
     target_hard: bool = False
     target_penalty_usd_per_share: float | None = Field(default=None, ge=0.0, allow_inf_nan=False)
     target_priority: int | None = None
+    maximum_active_routes: int | None = Field(default=None, ge=0)
     source: str
     source_version: str
 

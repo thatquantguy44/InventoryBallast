@@ -48,33 +48,36 @@ scope.
 
 Per `specs/spec002/00_PLAN.md`'s status line and `TRACEABILITY.md`:
 
-- **Implemented and tested:** T01-T14, T34, and the `securities_lending_inventory`
+- **Implemented and tested:** T01-T15, T34, and the `securities_lending_inventory`
   baseline of T35 — package scaffold, domain contracts, config, elasticity
   (`elasticity/`), sparse LP formulation (`formulation/`), the baseline LP compiler
   (`formulation/lp.py::compile_lp`), the HiGHS backend (`solvers/highs.py`), the
   independent solution verifier (`validation/solution_verifier.py`), T11's
   result/attribution/explainability layer (`reporting/`;
   `specs/0002-result-attribution-explainability/`), T12's public API facade + CLI
-  (`facade.py`, `services.py`, `cli.py`; `specs/0003-public-api-cli/`), and T13-T14's
+  (`facade.py`, `services.py`, `cli.py`; `specs/0003-public-api-cli/`), T13-T14's
   scenario engine plus a basic stress-testing capability (`scenarios/`,
   `domain/scenarios.py`, `domain/scenario_results.py`;
-  `specs/0004-scenario-engine/`). 153 tests pass in the default `pytest tests/ -q`
-  run (with the `highs` extra installed), plus a real `pip install -e .` console
-  script (`inventory-optimizer`, including a working `scenarios` subcommand) and
-  a `slow`-marked Core-desk-scale benchmark smoke test
-  (`specs/0005-test-hardening/`) run separately.
+  `specs/0004-scenario-engine/`), and T15's Phase 3 MIP business rules
+  (`formulation/mip.py::compile_mip`, `components/constraints/mip_rules.py`,
+  `formulation/compiler_support.py`; `specs/0006-mip-business-rules/`). 172 tests
+  pass in the default `pytest tests/ -q` run (with the `highs` extra installed),
+  plus a real `pip install -e .` console script (`inventory-optimizer`, including
+  a working `scenarios` subcommand) and a `slow`-marked Core-desk-scale benchmark
+  smoke test (`specs/0005-test-hardening/`) run separately.
 - **Test coverage hardened against `01_SPEC.md` §24 (2026-09-05):** an audit
   against the normative "Testing Strategy" section found `hypothesis` (a pinned
   dev dependency since T01) had never actually been used; `specs/0005-test-
   hardening/` closes that and four other real gaps — see its entry below.
-- **Not yet started:** Phase 3 (MIP business rules) — see "Next priorities" below.
+- **Not yet started:** Phase 4 (QP; `01_SPEC.md` §14.2) — see "Next priorities"
+  below.
 
 ## Environment
 
 ```bash
 python3 -m venv .venv
 .venv/bin/python -m pip install -e ".[dev,highs,dataframe,agentic]"
-.venv/bin/python -m pytest tests/ -q         # 153 passed, as of this writing (fast; excludes `slow`)
+.venv/bin/python -m pytest tests/ -q         # 172 passed, as of this writing (fast; excludes `slow`)
 .venv/bin/python -m pytest tests/ -m slow -q # the Core desk benchmark smoke test (~1-2s)
 inventory-optimizer doctor                    # sanity-check the installed console script
 ```
@@ -227,17 +230,44 @@ subsections found five real, closeable gaps, all now closed (all eight
 platform tests) are correctly untested — those subsystems don't exist yet,
 so there is nothing to gap-check; not a finding.
 
-### Phase 3 — MIP business rules (`01_SPEC.md` §14; `00_PLAN.md`) — next up
+### Phase 3 — MIP business rules (`01_SPEC.md` §14.1) — done (2026-09-05)
 
-Not started. Lot sizes, minimum tickets, all-or-none requests, route
-activation, cardinality constraints, and discrete rate-ladder selection —
-`00_PLAN.md`'s exit gate: "integrality is verified after solve; a
-time-limited incumbent is never labeled optimal." This is also what the
+`specs/0006-mip-business-rules/` (`spec.md`, `plan.md`, `tasks.md`) — all nine
+tasks (`T-001`-`T-009`) done. All-or-none routes, minimum tickets, lot sizes,
+and a new cardinality cap (`domain/policies.py::UtilizationPolicy.
+maximum_active_routes`) are each modeled with a binary route-activation
+variable (`z`) or integer lot-count variable (`n`), contributed by three new
+MIP-only constraint components (`components/constraints/mip_rules.py::
+RouteActivationConstraint`, `CardinalityConstraint`, `LotSizeConstraint`) on
+top of every existing baseline LP component, unchanged
+(`formulation/mip.py::compile_mip`). `formulation/lp.py::compile_lp` now fails
+closed — raises a structured, per-field `InputValidationError` (code
+`MIP_REQUIRED`) — rather than silently ignoring these fields on a request
+that needs them; `InventoryOptimizer.optimize()`
+(`formulation/compiler_support.py::needs_mip`) auto-routes each request to
+whichever compiler it actually needs, so callers never choose manually.
+
+Nothing in `reporting/`, `validation/`, `solvers/`, `services.py`, or `cli.py`
+needed any change: T09's `HighsBackend` already handled integer variables and
+suppressed duals for them, T10's `validation.solution_verifier` already
+checked integrality against whatever array it was given, and T11's
+attribution/explanation logic operates purely on primal values and domain
+fields. `specs/spec002/TRACEABILITY.md`'s `LP-009` row moved `SPECIFIED` →
+`IMPLEMENTED` for the MIP portion specifically (QP/PWL/NLP — §14.2-14.4 —
+remain `SPECIFIED`, tagged T18 and later). 19 new tests
+(`tests/golden/test_mip_business_rules.py`,
+`tests/unit/test_mip_compiler.py`); zero regressions in the pre-existing 153.
+
+### Phase 4 — QP (`01_SPEC.md` §14.2; `00_PLAN.md`) — next up
+
+Not started. Discrete rate-ladder selection and other quadratic-objective
+extensions to the baseline formulation. This is also what the
 `quantsmith.pipelines.optimization_solvers.solve_milp` reference solver
-(see "The `quantsmith` package" below) becomes useful for, as an independent
-toy-scale cross-check during design review.
+(see "The `quantsmith` package" below) could become useful for as an
+independent toy-scale cross-check during design review, if QP is approached
+via an MIQP relaxation.
 
-After Phase 3: Phase 4 (QP), Phase 5 (nonlinear/multi-period research), the
+After Phase 4: Phase 5 (nonlinear/multi-period research), the
 Bloomberg-enriched realism workstream, and the agency/prime desk
 workstream — see `00_PLAN.md` for exit gates on each.
 
@@ -251,8 +281,8 @@ beyond just the constitution/gates already wired into CI.
 | Next task | QuantSmith agent |
 | --- | --- |
 | T11 (done) — shadow prices, solver diagnostics, reason codes | `agents/optimization/solver_diagnostics_sensitivity/` |
-| T12 (done), T13-T14 (done) / Phase 3 and later phases — turning an ambiguous next decision into variables/constraints/ACs before coding | `agents/optimization/problem_formulation/` |
-| Phase 3 (next up) — MIP business rules (lot sizes, all-or-none, cardinality) | `agents/optimization/mixed_integer_optimization/` |
+| T12 (done), T13-T14 (done), Phase 3 (done) / later phases — turning an ambiguous next decision into variables/constraints/ACs before coding | `agents/optimization/problem_formulation/` |
+| Phase 3 (done) — MIP business rules (lot sizes, all-or-none, cardinality) | `agents/optimization/mixed_integer_optimization/` |
 | Collateral workstream (T30-T32: haircuts, capacity, joint mode) | `agents/optimization/collateral_margin_optimization/` — named for exactly this problem |
 | General LP review as more constraint components get added | `agents/optimization/linear_programming/` |
 | Routing the above as work grows | `agents/optimization/optimization_orchestrator/` |
@@ -299,17 +329,16 @@ HiGHS/`CompiledProblem` stack — not a replacement for it. Verified concretely
 
 ### How to actually start
 
-**T11, T12, T13-T14, and the §24 test-hardening pass are all done**
-(2026-09-04, 2026-09-05 ×3) — see above. Repeat the same "write the spec
-first" pattern for Phase 3 (MIP business rules) next: invoke
+**T11, T12, T13-T14, the §24 test-hardening pass, and Phase 3 (MIP business
+rules) are all done** (2026-09-04, 2026-09-05 ×4) — see above. Repeat the
+same "write the spec first" pattern for Phase 4 (QP) next: invoke
 `workflow_orchestrator`, let it route to `agents/optimization/
-mixed_integer_optimization/` for turning §14's lot-size/all-or-none/
-cardinality/rate-ladder requirements into `REQ-*`/`AC-*` rows and
-`testing_validation` for the AC tests (including both proven-optimal and
-time-limited-feasible outcomes — `00_PLAN.md`'s own exit gate), and write a
-real `specs/0006-*` directory (`0005` is now taken by
-`specs/0005-test-hardening/`) tracked by the same `spec`/`spec-index` gates
-the specs before it used.
+problem_formulation/` (and `linear_programming/` for the reused baseline
+components) for turning §14.2's discrete rate-ladder/quadratic-objective
+requirements into `REQ-*`/`AC-*` rows and `testing_validation` for the AC
+tests, and write a real `specs/0007-*` directory (`0006` is now taken by
+`specs/0006-mip-business-rules/`) tracked by the same `spec`/`spec-index`
+gates the specs before it used.
 
 ## Open items for the next agent (not yet resolved)
 
