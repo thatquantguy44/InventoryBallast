@@ -58,6 +58,17 @@ Per `specs/spec002/00_PLAN.md`'s status line and `TRACEABILITY.md`:
   exist under `src/inventory_optimizer/` yet (confirmed by directory listing) —
   T11 and T12 below are real gaps, not just unmarked completions.
 
+## Environment
+
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install -e ".[dev,highs,dataframe,agentic]"
+.venv/bin/python -m pytest tests/ -q   # 97 passed, as of this writing
+```
+
+See `README.md`'s "Development" section for the extras breakdown. `.venv/` is
+gitignored — recreate it rather than expecting it to be there.
+
 ## Next priorities, in order
 
 ### T11 — Result, attribution, and explainability (`01_SPEC.md` §18)
@@ -107,6 +118,54 @@ Nothing under `src/inventory_optimizer/` currently builds the
 engine, T13-T14), Phase 3 (MIP business rules), Phase 4 (QP), Phase 5
 (nonlinear/multi-period research), the Bloomberg-enriched realism workstream, and
 the agency/prime desk workstream — see that file for exit gates on each.
+
+## Using QuantSmith to build the rest of this repo
+
+Two layers were adopted (see "What this repo is"); both have concrete uses here,
+beyond just the constitution/gates already wired into CI.
+
+### The agents (scaffold) — routes almost 1:1 onto the task list above
+
+| Next task | QuantSmith agent |
+| --- | --- |
+| T11 — shadow prices, solver diagnostics, reason codes | `agents/optimization/solver_diagnostics_sensitivity/` |
+| T12 and later phases — turning an ambiguous next decision into variables/constraints/ACs before coding | `agents/optimization/problem_formulation/` |
+| Phase 3 — MIP business rules (lot sizes, all-or-none, cardinality) | `agents/optimization/mixed_integer_optimization/` |
+| Collateral workstream (T30-T32: haircuts, capacity, joint mode) | `agents/optimization/collateral_margin_optimization/` — named for exactly this problem |
+| General LP review as more constraint components get added | `agents/optimization/linear_programming/` |
+| Routing the above as work grows | `agents/optimization/optimization_orchestrator/` |
+| Writing/keeping the tests that back each new AC | `agents/testing_validation/` |
+| Driving each new task through Specify → Plan → Tasks → Implement → Verify → Operate | `agents/workflow_orchestrator/` — invoke this one first; it routes to the rest |
+
+`agents/optimization/inventory_supply_chain/` also exists but is a false-friend
+match — it's aimed at physical-goods inventory (safety stock, multi-echelon
+replenishment), not securities-lending inventory. Don't route there.
+
+### The `quantsmith` package (the `agentic` extra)
+
+Narrower fit, since `inventory_optimizer` already has its own purpose-built
+HiGHS/`CompiledProblem` stack — not a replacement for it. Two places it's
+genuinely additive rather than redundant:
+
+- `quantsmith.pipelines.solve_milp` / `solve_lp` as an independent, dependency-free
+  reference solver to cross-check results against once Phase 3 (MIP) lands — a
+  second implementation is a good input to a `solver_diagnostics_sensitivity`
+  review, not something to import into the engine itself.
+- `quantsmith.pipelines.DashboardSpec` / `render_streamlit` / `write_xlsx` if a
+  quick allocation/economics/utilization dashboard over `OptimizationResult` is
+  wanted once T11 exists — same governed-dashboard pattern QuantSmith uses for
+  its own examples, no need to hand-roll one.
+
+### How to actually start
+
+Invoke `workflow_orchestrator` on T11 first — it's the concrete, unstarted next
+task. Let it route to `problem_formulation` and `solver_diagnostics_sensitivity`
+for the design and `testing_validation` for the AC tests, and write the result as
+a real `specs/000X-result-attribution/` directory (not just prose in
+`specs/spec002/00_PLAN.md`) so it's tracked by the `spec`/`spec-index` gates
+already enforced in this repo's CI. Right now T11 and T12 exist only as plan
+items in Spec002, not as SDD specs — that's a gap worth closing on the very
+first spec written here.
 
 ## Open items for the next agent (not yet resolved)
 

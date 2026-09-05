@@ -22,9 +22,15 @@ and `specs/spec002/01_SPEC.md` for the full specification, and
 ## Development
 
 ```bash
-pip install -e ".[dev]"
-pytest
+python3 -m venv .venv
+.venv/bin/python -m pip install -e ".[dev,highs,dataframe,agentic]"
+.venv/bin/python -m pytest tests/ -q
 ```
+
+`highs` is required for the full test suite (`solvers/highs.py` and its tests
+import `highspy`); `agentic` pulls in the `quantsmith` package (see
+`docs/handoff.md` for what it's useful for here). Drop either extra for a
+lighter install if you only need a subset.
 
 ## Boundary rule
 
