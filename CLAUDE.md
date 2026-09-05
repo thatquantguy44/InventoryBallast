@@ -91,7 +91,11 @@ that. Omit them unconditionally in this repository.
 
 ## Key pointers
 
+- `docs/handoff.md` — **read this first.** Current state, next priorities, and
+  open items for whoever (human or agent) picks up this repo next.
 - `README.md` — InventoryBallast overview (the securities-lending optimization engine).
+- `specs/spec002/` — the normative specification for this engine (`00_PLAN.md`,
+  `01_SPEC.md`, `TRACEABILITY.md`, and more).
 - `agents/README.md` — agent catalog (adopted from QuantSmith).
 - `specs/0001-daily-momentum-signal/` — a worked, fully traceable spec example
   (adopted from QuantSmith as a reference; write InventoryBallast's own specs
