@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Validate shell syntax of quality gates
+        run: |
+          for hook in hooks/stages/*.sh; do sh -n "$hook"; done
+      - name: Enforce spec-driven traceability
+        run: |
+          QF_STAGE_ENFORCE=1 sh hooks/stages/run-stage.sh spec spec-index
+      - name: Enforce agent catalog
+        run: |
+          QF_STAGE_ENFORCE=1 sh hooks/stages/run-stage.sh agent-catalog
+      - name: Enforce pipeline contract (only when a manifest exists)
+        run: |
+          QF_STAGE_ENFORCE=1 sh hooks/stages/run-stage.sh pipeline-contract
+      - name: Enforce secret scan
+        run: |
+          BASE="${{ github.event.pull_request.base.sha }}"
+          [ -n "$BASE" ] || BASE="$(git rev-parse HEAD~1 2>/dev/null || true)"
+          QF_STAGE_ENFORCE=1 QF_DIFF_BASE="$BASE" sh hooks/stages/run-stage.sh secret-scan
+      - name: Leakage smell scan (advisory)
+        run: |
+          BASE="${{ github.event.pull_request.base.sha }}"
+          [ -n "$BASE" ] || BASE="$(git rev-parse HEAD~1 2>/dev/null || true)"
+          QF_DIFF_BASE="$BASE" sh hooks/stages/run-stage.sh leakage
+      - name: Commit authorship policy (advisory — see CLAUDE.md "GitHub posts")
+        run: |
+          BASE="${{ github.event.pull_request.base.sha }}"
+          if [ -n "$BASE" ]; then RANGE="$BASE..HEAD"; else RANGE="HEAD~1..HEAD"; fi
+          QF_ATTRIB_RANGE="$RANGE" sh hooks/stages/run-stage.sh agent-attribution
+      - name: Everything else (advisory)
+        run: |
+          sh hooks/stages/run-stage.sh
+
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+      - name: Install package with declared dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,highs,dataframe,agentic]"
+      - name: Run test suite
+        run: |
+          python -m pytest tests/ -q
