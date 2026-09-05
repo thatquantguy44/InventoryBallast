@@ -1,9 +1,10 @@
 """Validated, frozen configuration objects (Section 8.2 of ``01_SPEC.md``).
 
 Phase 0A implements the sections the E1/E2 vertical uses: ``desk``, ``formulation``,
-``validation``, ``solver``, ``observability``, ``elasticity``. ``objective``, ``constraints``,
-``schedules``, ``collateral``, and ``scenarios`` are added as those subsystems land; until then,
-supplying them is rejected by ``extra="forbid"`` rather than silently ignored.
+``validation``, ``solver``, ``observability``, ``elasticity``. ``objective`` is added by T18
+(Phase 4 QP; see ``ObjectiveConfig`` below). ``constraints``, ``schedules``, ``collateral``, and
+``scenarios`` are still added as those subsystems land; until then, supplying them is rejected by
+``extra="forbid"`` rather than silently ignored.
 """
 
 from __future__ import annotations
@@ -79,6 +80,22 @@ class ElasticityConfig(BaseModel):
     uncertainty_haircut_sigma: float = Field(default=1.0, ge=0.0)
 
 
+class ObjectiveConfig(BaseModel):
+    """Section 8.2's deferred ``objective`` section starts landing here (T18; Section 14.2).
+
+    ``allocation_stability_penalty`` is Phase 4's one convex QP term: a desk-level coefficient
+    (USD per share-squared) penalizing route quantity deviation from the current book, uniformly
+    across every route -- a desk policy decision, not a per-route/per-request field (unlike
+    Phase 3's MIP triggers). Zero (the default) means "no penalty configured":
+    ``formulation.compiler_support.needs_qp`` never triggers, so a config predating this field
+    behaves identically.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    allocation_stability_penalty: float = Field(default=0.0, ge=0.0)
+
+
 class InventoryOptimizerConfig(BaseModel):
     """Section 8.2. Frozen after validation; unknown top-level or nested keys fail closed."""
 
@@ -90,3 +107,4 @@ class InventoryOptimizerConfig(BaseModel):
     solver: SolverConfig = Field(default_factory=SolverConfig)
     observability: ObservabilityConfig = Field(default_factory=ObservabilityConfig)
     elasticity: ElasticityConfig = Field(default_factory=ElasticityConfig)
+    objective: ObjectiveConfig = Field(default_factory=ObjectiveConfig)

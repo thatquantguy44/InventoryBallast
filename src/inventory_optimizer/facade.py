@@ -2,15 +2,17 @@
 
 ``InventoryOptimizer.optimize()`` composes five already-implemented, already-tested stages in a
 fixed order -- ``validation.raise_if_invalid`` -> ``formulation.context.build_context`` ->
-``formulation.lp.compile_lp`` or ``formulation.mip.compile_mip`` (T15; auto-selected via
-``formulation.compiler_support.needs_mip`` -- Section 14.1's discrete triggers route to the MIP
-compiler automatically, no caller action needed) -> the configured ``ports.solver.SolverBackend.
-solve`` -> ``validation.solution_verifier.verify_solution`` -> ``reporting.result_builder.
-build_optimization_result`` -- without re-deriving any of their internal logic. This module is the
-one place in this spec's surface that is intentionally impure (wall clock, ``uuid4``): T11's
-``build_optimization_result`` deliberately left ``run_id``/``created_at``/``config_hash``/
-``input_hash`` as caller-supplied keyword arguments precisely so that function itself could stay
-pure; this is the caller.
+``formulation.mip.compile_mip``, ``formulation.qp.compile_qp``, or ``formulation.lp.compile_lp``
+(T15/T18; auto-selected via ``formulation.compiler_support.needs_mip``/``needs_qp`` -- Section
+14.1's discrete triggers and Section 14.2's configured stability penalty each route to their own
+compiler automatically, no caller action needed; requesting both together fails closed, Section
+14.2's "mixed-integer quadratic... must never be labeled globally optimal when it is not") -> the
+configured ``ports.solver.SolverBackend.solve`` -> ``validation.solution_verifier.verify_solution``
+-> ``reporting.result_builder.build_optimization_result`` -- without re-deriving any of their
+internal logic. This module is the one place in this spec's surface that is intentionally impure
+(wall clock, ``uuid4``): T11's ``build_optimization_result`` deliberately left ``run_id``/
+``created_at``/``config_hash``/``input_hash`` as caller-supplied keyword arguments precisely so
+that function itself could stay pure; this is the caller.
 
 ``load_config`` is a thin, honestly-scoped wrapper over ``config.build_config``/
 ``config.load_yaml_file`` -- not the full five-axis named-profile resolution Section 17.1
@@ -33,10 +35,11 @@ from inventory_optimizer.config.models import InventoryOptimizerConfig, SolverCo
 from inventory_optimizer.domain.requests import OptimizationRequest
 from inventory_optimizer.domain.results import OptimizationResult
 from inventory_optimizer.exceptions import ConfigurationError
-from inventory_optimizer.formulation.compiler_support import needs_mip
+from inventory_optimizer.formulation.compiler_support import needs_mip, needs_qp
 from inventory_optimizer.formulation.context import build_context
 from inventory_optimizer.formulation.lp import compile_lp
 from inventory_optimizer.formulation.mip import compile_mip
+from inventory_optimizer.formulation.qp import compile_qp
 from inventory_optimizer.platform.context import PlatformInvocationContext
 from inventory_optimizer.ports.solver import SolverBackend, SolverOptions
 from inventory_optimizer.reporting.result_builder import build_optimization_result
@@ -106,11 +109,12 @@ class InventoryOptimizer:
     ) -> OptimizationResult:
         raise_if_invalid(request, max_staleness_hours=self._config.validation.max_staleness_hours)
         context = build_context(request, self._config)
-        problem = (
-            compile_mip(request, self._config)
-            if needs_mip(request)
-            else compile_lp(request, self._config)
-        )
+        if needs_mip(request):
+            problem = compile_mip(request, self._config)
+        elif needs_qp(self._config):
+            problem = compile_qp(request, self._config)
+        else:
+            problem = compile_lp(request, self._config)
         result = self._backend.solve(problem, _solver_options_from_config(self._config.solver))
         verification = verify_solution(problem, result)
         solution = VerifiedSolution(

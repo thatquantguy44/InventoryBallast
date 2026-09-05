@@ -1,4 +1,4 @@
-"""Independent solution verifier (T10; Section 18.1 "Verification", requirement VER-001).
+"""Independent solution verifier (T10, T18; Section 18.1 "Verification", requirement VER-001).
 
 Recomputes primal feasibility, integrality, and the objective directly from a ``CompiledProblem``
 and a ``SolverResult`` -- never trusting the solver's own claim (Locked Design Decision #8: "no
@@ -7,6 +7,10 @@ silent repair"; Section 27's risk: "solver status misinterpreted -> unsafe recom
 Deliberately independent of ``result.status``: a ``FEASIBLE_LIMIT`` result with a primal that
 satisfies every bound/row/integrality check and matches its claimed objective still passes here --
 this only checks whether the returned primal *is* what it claims to be, not whether it is optimal.
+
+The objective reconstruction includes ``problem.quadratic_objective`` (Section 14.2) via
+``formulation.qp_support.signed_quadratic_term`` whenever a QP compile set it -- omitting it would
+make every correct QP solve fail this check by exactly the magnitude of its quadratic term.
 """
 
 from __future__ import annotations
@@ -17,6 +21,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from inventory_optimizer.formulation.compiled import CompiledProblem
+from inventory_optimizer.formulation.qp_support import signed_quadratic_term
 from inventory_optimizer.ports.solver import SolverResult
 
 DEFAULT_TOLERANCE = 1e-6
@@ -69,6 +74,10 @@ def verify_solution(
         max_integrality_violation = 0.0
 
     reconstructed_objective = float(problem.linear_objective @ primal)
+    if problem.quadratic_objective is not None:
+        reconstructed_objective += signed_quadratic_term(
+            problem.quadratic_objective, primal, problem.objective_sense
+        )
     claimed_objective = result.objective_value_unscaled
     objective_reconstruction_delta = (
         abs(reconstructed_objective - claimed_objective)

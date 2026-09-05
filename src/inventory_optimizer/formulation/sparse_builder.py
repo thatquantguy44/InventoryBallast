@@ -2,7 +2,8 @@
 coordinate form and convert once to the backend-preferred sparse format"; Section 16.1: "no
 component may assemble a dense matrix proportional to routes x constraints").
 
-Only the constraint matrix is sparse-accumulated. The objective, bound, and row-limit vectors are
+The constraint matrix and the quadratic objective (T18; Section 14.2) are both sparse-accumulated
+in coordinate form and converted once. The linear objective, bound, and row-limit vectors are
 dense NumPy arrays sized by variable/row count (not routes x constraints), which Section 16.1's
 own ``CompiledProblem`` sketch already types as plain ``NDArray[np.float64]``.
 """
@@ -37,6 +38,9 @@ class SparseBuilder:
         self._coo_rows: list[int] = []
         self._coo_cols: list[int] = []
         self._coo_data: list[float] = []
+        self._quad_rows: list[int] = []
+        self._quad_cols: list[int] = []
+        self._quad_data: list[float] = []
         n = len(variable_index)
         self._linear_objective: NDArray[np.float64] = np.zeros(n, dtype=np.float64)
         self._variable_lower: NDArray[np.float64] = np.zeros(n, dtype=np.float64)
@@ -62,6 +66,25 @@ class SparseBuilder:
         variable's coefficient."""
         self._linear_objective[self._variable_index.position(variable_key)] += value
 
+    def add_quadratic_objective_coefficient(
+        self, row_key: VariableKey, col_key: VariableKey, value: float
+    ) -> None:
+        """Contributes to the assembled symmetric ``Q`` in ``CompiledProblem.quadratic_objective``
+        (T18; Section 14.2) -- a diagonal entry (``Q[i,i] += value``) when ``row_key == col_key``,
+        or a symmetric pair (``Q[i,j] = Q[j,i] += value``) otherwise, matching how one writes a
+        quadratic penalty term by hand. Multiple contributions to the same pair sum (scipy's
+        COO-to-CSR conversion sums duplicate entries, same convention ``add_row_coefficient``
+        already relies on)."""
+        row_position = self._variable_index.position(row_key)
+        col_position = self._variable_index.position(col_key)
+        self._quad_rows.append(row_position)
+        self._quad_cols.append(col_position)
+        self._quad_data.append(value)
+        if row_position != col_position:
+            self._quad_rows.append(col_position)
+            self._quad_cols.append(row_position)
+            self._quad_data.append(value)
+
     def set_variable_bounds(self, variable_key: VariableKey, *, lower: float, upper: float) -> None:
         if lower > upper:
             raise ValueError(f"variable lower bound {lower!r} exceeds upper bound {upper!r}")
@@ -74,7 +97,6 @@ class SparseBuilder:
         *,
         formulation: Formulation,
         objective_sense: ObjectiveSense,
-        quadratic_objective: SparseMatrix | None = None,
         integrality: NDArray[np.int8] | None = None,
         scaling: ScalingMetadata | None = None,
         manifest: ComponentManifest = (),
@@ -87,6 +109,14 @@ class SparseBuilder:
             shape=(n_rows, n_vars),
             dtype=np.float64,
         ).tocsr()
+
+        quadratic_objective: SparseMatrix | None = None
+        if self._quad_data:
+            quadratic_objective = coo_matrix(
+                (self._quad_data, (self._quad_rows, self._quad_cols)),
+                shape=(n_vars, n_vars),
+                dtype=np.float64,
+            ).tocsr()
 
         return CompiledProblem(
             formulation=formulation,

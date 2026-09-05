@@ -48,7 +48,7 @@ scope.
 
 Per `specs/spec002/00_PLAN.md`'s status line and `TRACEABILITY.md`:
 
-- **Implemented and tested:** T01-T15, T34, and the `securities_lending_inventory`
+- **Implemented and tested:** T01-T18, T34, and the `securities_lending_inventory`
   baseline of T35 — package scaffold, domain contracts, config, elasticity
   (`elasticity/`), sparse LP formulation (`formulation/`), the baseline LP compiler
   (`formulation/lp.py::compile_lp`), the HiGHS backend (`solvers/highs.py`), the
@@ -58,27 +58,31 @@ Per `specs/spec002/00_PLAN.md`'s status line and `TRACEABILITY.md`:
   (`facade.py`, `services.py`, `cli.py`; `specs/0003-public-api-cli/`), T13-T14's
   scenario engine plus a basic stress-testing capability (`scenarios/`,
   `domain/scenarios.py`, `domain/scenario_results.py`;
-  `specs/0004-scenario-engine/`), and T15's Phase 3 MIP business rules
+  `specs/0004-scenario-engine/`), T15's Phase 3 MIP business rules
   (`formulation/mip.py::compile_mip`, `components/constraints/mip_rules.py`,
-  `formulation/compiler_support.py`; `specs/0006-mip-business-rules/`). 172 tests
+  `formulation/compiler_support.py`; `specs/0006-mip-business-rules/`), and T18's
+  Phase 4 QP allocation-stability penalty (`formulation/qp.py::compile_qp`,
+  `components/objective_terms/allocation_stability.py`,
+  `formulation/qp_support.py`; `specs/0007-qp-allocation-stability/`). 193 tests
   pass in the default `pytest tests/ -q` run (with the `highs` extra installed),
   plus a real `pip install -e .` console script (`inventory-optimizer`, including
-  a working `scenarios` subcommand) and a `slow`-marked Core-desk-scale benchmark
-  smoke test (`specs/0005-test-hardening/`) run separately.
+  a working `scenarios` subcommand) and two `slow`-marked benchmark smoke tests
+  (Core-desk-scale LP from `specs/0005-test-hardening/`; moderate-scale QP from
+  `specs/0007-qp-allocation-stability/`) run separately.
 - **Test coverage hardened against `01_SPEC.md` §24 (2026-09-05):** an audit
   against the normative "Testing Strategy" section found `hypothesis` (a pinned
   dev dependency since T01) had never actually been used; `specs/0005-test-
   hardening/` closes that and four other real gaps — see its entry below.
-- **Not yet started:** Phase 4 (QP; `01_SPEC.md` §14.2) — see "Next priorities"
-  below.
+- **Not yet started:** Phase 5 (nonlinear/multi-period research; `01_SPEC.md`
+  §14.4, §13's multi-period extensions) — see "Next priorities" below.
 
 ## Environment
 
 ```bash
 python3 -m venv .venv
 .venv/bin/python -m pip install -e ".[dev,highs,dataframe,agentic]"
-.venv/bin/python -m pytest tests/ -q         # 172 passed, as of this writing (fast; excludes `slow`)
-.venv/bin/python -m pytest tests/ -m slow -q # the Core desk benchmark smoke test (~1-2s)
+.venv/bin/python -m pytest tests/ -q         # 193 passed, as of this writing (fast; excludes `slow`)
+.venv/bin/python -m pytest tests/ -m slow -q # 2 benchmark smoke tests (Core desk LP + QP scale, ~1-2s)
 inventory-optimizer doctor                    # sanity-check the installed console script
 ```
 
@@ -258,18 +262,69 @@ remain `SPECIFIED`, tagged T18 and later). 19 new tests
 (`tests/golden/test_mip_business_rules.py`,
 `tests/unit/test_mip_compiler.py`); zero regressions in the pre-existing 153.
 
-### Phase 4 — QP (`01_SPEC.md` §14.2; `00_PLAN.md`) — next up
+### Phase 4 — QP allocation-stability penalty (`01_SPEC.md` §14.2) — done (2026-09-05)
 
-Not started. Discrete rate-ladder selection and other quadratic-objective
-extensions to the baseline formulation. This is also what the
-`quantsmith.pipelines.optimization_solvers.solve_milp` reference solver
-(see "The `quantsmith` package" below) could become useful for as an
-independent toy-scale cross-check during design review, if QP is approached
-via an MIQP relaxation.
+`specs/0007-qp-allocation-stability/` (`spec.md`, `plan.md`, `tasks.md`) — all
+eleven tasks (`T-001`-`T-011`) done. Of §14.2's four candidate convex terms
+(squared deviation from current allocations, borrower/security concentration,
+covariance-weighted risk, utilization-target deviation), only the first is
+groundable today with no new domain concept — a new desk-level
+`config.objective.allocation_stability_penalty` coefficient penalizes
+`(q_j - current_quantity_shares_j)^2` per route, contributed entirely via the
+existing `inc_j`/`dec_j` transition variables (zero at the unchanged baseline,
+no new `CompiledProblem` field) by a new objective component
+(`components/objective_terms/allocation_stability.py`) on top of every
+existing baseline component, unchanged (`formulation/qp.py::compile_qp`).
+`compile_lp` fails closed (`QP_REQUIRED`) on a positive penalty; `compile_mip`/
+`compile_qp` each fail closed (`MIQP_UNSUPPORTED`) if the other's own trigger
+is also present (Section 14.2: mixed-integer QP needs a separate capable
+backend or an explicit decomposition, neither of which exists);
+`InventoryOptimizer.optimize()` auto-routes exactly as it already does for
+MIP.
 
-After Phase 4: Phase 5 (nonlinear/multi-period research), the
-Bloomberg-enriched realism workstream, and the agency/prime desk
-workstream — see `00_PLAN.md` for exit gates on each.
+**A real numerical finding shaped this spec.** Reconstructing the compiled QP
+model directly against the pinned `highspy` (1.15.1) `Highs()` API — bypassing
+this repo's compiler entirely — reproduced a genuine solver stall: HiGHS's QP
+active-set method iterates into the millions without converging whenever the
+Hessian's magnitude sits several orders below the rest of the model's
+coefficients, a real backend-version limitation Section 14.2 anticipates
+("Continuous QP support is backend/version capability-gated"), not a modeling
+defect. Uniformly rescaling the whole objective by one positive constant (an
+exact transformation — never changes the optimal `x`) resolved every
+reproduced case instantly. `formulation/qp.py::compile_qp` computes this scale
+factor and attaches it via the long-dormant `CompiledProblem.scaling` field
+(Section 20.3, unused since Phase 0A); only `solvers/highs.py` ever reads it —
+`CompiledProblem.linear_objective`/`quadratic_objective` themselves stay in
+true USD units throughout, so `validation.solution_verifier`/
+`reporting.attribution` needed zero scaling-awareness changes beyond
+including the quadratic term in the independent objective reconstruction
+(the one other real gap this spec closed: without it, every correct QP solve
+would have failed verification by exactly its own quadratic magnitude).
+
+While adding the new QP-only objective component, `formulation/
+compiler_support.py::resolve_component` gained a formulation-membership
+check — Section 15.1 says components "declare formulations" but nothing
+enforced it before this spec; verified purely additive (every existing
+component already declares its correct, complete scope). `specs/spec002/
+TRACEABILITY.md`'s `LP-009` row extends its `IMPLEMENTED` status to cover
+this QP term (PWL/NLP and QP's other three candidate terms stay `SPECIFIED`).
+21 new tests (`tests/golden/test_qp_allocation_stability.py`,
+`tests/unit/test_qp_compiler.py`, `tests/unit/test_qp_support.py`,
+`tests/benchmark/test_qp_scale.py`); zero regressions in the pre-existing 172.
+
+### Phase 5 — Nonlinear and multi-period research (`01_SPEC.md` §14.4, §13; `00_PLAN.md`) — next up
+
+Not started. Joint fee/quantity demand curves through an optional nonlinear
+backend or sequential convex approximation; multi-period settlement and
+scenario-tree extensions. `00_PLAN.md`'s own guidance: "promote an extension
+only after benchmark, convergence, and fallback behavior are documented." This
+is also what the `quantsmith.pipelines.optimization_solvers.solve_milp`
+reference solver (see "The `quantsmith` package" below) could become useful
+for as an independent toy-scale cross-check during design review, for any
+MIQP-relaxation approach to a discrete piece of this phase.
+
+After Phase 5: the Bloomberg-enriched realism workstream and the agency/prime
+desk workstream — see `00_PLAN.md` for exit gates on each.
 
 ## Using QuantSmith to build the rest of this repo
 
@@ -281,8 +336,9 @@ beyond just the constitution/gates already wired into CI.
 | Next task | QuantSmith agent |
 | --- | --- |
 | T11 (done) — shadow prices, solver diagnostics, reason codes | `agents/optimization/solver_diagnostics_sensitivity/` |
-| T12 (done), T13-T14 (done), Phase 3 (done) / later phases — turning an ambiguous next decision into variables/constraints/ACs before coding | `agents/optimization/problem_formulation/` |
+| T12 (done), T13-T14 (done), Phase 3 (done), Phase 4 (done) / later phases — turning an ambiguous next decision into variables/constraints/ACs before coding | `agents/optimization/problem_formulation/` |
 | Phase 3 (done) — MIP business rules (lot sizes, all-or-none, cardinality) | `agents/optimization/mixed_integer_optimization/` |
+| Phase 5 (next up) — nonlinear/multi-period research | `agents/optimization/problem_formulation/`, `agents/optimization/linear_programming/` for the reused baseline |
 | Collateral workstream (T30-T32: haircuts, capacity, joint mode) | `agents/optimization/collateral_margin_optimization/` — named for exactly this problem |
 | General LP review as more constraint components get added | `agents/optimization/linear_programming/` |
 | Routing the above as work grows | `agents/optimization/optimization_orchestrator/` |
@@ -310,12 +366,15 @@ HiGHS/`CompiledProblem` stack — not a replacement for it. Verified concretely
   exceptions caught and reported to stderr rather than raised raw. `cli.py`
   mirrors this convention.
 - `quantsmith.pipelines.optimization_solvers.solve_lp` / `solve_milp` as an
-  independent reference solver to cross-check results against once Phase 3
-  (MIP) lands: real, but pure-Python, dense, and `x >= 0`-only (no arbitrary
-  variable bounds, no sparse matrices) — usable only as a toy oracle for small
-  test fixtures via translation glue (densify, split ranged rows, encode
-  bounds as extra rows), not a production cross-check against our
-  `CompiledProblem`'s sparse/ranged-row/arbitrary-bounds shape.
+  independent reference solver to cross-check results against: real, but
+  pure-Python, dense, and `x >= 0`-only (no arbitrary variable bounds, no
+  sparse matrices, no quadratic-objective support) — usable only as a toy
+  oracle for small LP/MIP test fixtures via translation glue (densify, split
+  ranged rows, encode bounds as extra rows), not a production cross-check
+  against our `CompiledProblem`'s sparse/ranged-row/arbitrary-bounds/QP shape.
+  Not used for Phase 4's QP work (no QP support in `quantsmith` itself); the
+  cross-check that mattered there was empirical (reconstructing the compiled
+  model directly against raw `highspy` calls — see Phase 4's writeup above).
 - `quantsmith.pipelines.DashboardSpec` / `render_streamlit` / `write_xlsx`:
   **weaker fit than it looked.** These are metadata-only — a `Panel`
   references a *named* metric/dataset resolved by a live data-serving
@@ -329,16 +388,21 @@ HiGHS/`CompiledProblem` stack — not a replacement for it. Verified concretely
 
 ### How to actually start
 
-**T11, T12, T13-T14, the §24 test-hardening pass, and Phase 3 (MIP business
-rules) are all done** (2026-09-04, 2026-09-05 ×4) — see above. Repeat the
-same "write the spec first" pattern for Phase 4 (QP) next: invoke
+**T11, T12, T13-T14, the §24 test-hardening pass, Phase 3 (MIP business
+rules), and Phase 4 (QP allocation-stability) are all done** (2026-09-04,
+2026-09-05 ×5) — see above. Repeat the same "write the spec first" pattern
+for Phase 5 (nonlinear/multi-period research) next: invoke
 `workflow_orchestrator`, let it route to `agents/optimization/
 problem_formulation/` (and `linear_programming/` for the reused baseline
-components) for turning §14.2's discrete rate-ladder/quadratic-objective
-requirements into `REQ-*`/`AC-*` rows and `testing_validation` for the AC
-tests, and write a real `specs/0007-*` directory (`0006` is now taken by
-`specs/0006-mip-business-rules/`) tracked by the same `spec`/`spec-index`
-gates the specs before it used.
+components) for turning §14.4's nonlinear-backend/sequential-convex-
+approximation requirements and §13's multi-period extensions into `REQ-*`/
+`AC-*` rows and `testing_validation` for the AC tests, and write a real
+`specs/0008-*` directory (`0007` is now taken by
+`specs/0007-qp-allocation-stability/`) tracked by the same `spec`/
+`spec-index` gates the specs before it used. `00_PLAN.md`'s own Phase 5
+guidance — "promote an extension only after benchmark, convergence, and
+fallback behavior are documented" — is stricter than any prior phase's exit
+gate; budget real design-review time before implementation starts.
 
 ## Open items for the next agent (not yet resolved)
 

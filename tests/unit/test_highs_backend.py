@@ -113,11 +113,12 @@ def test_mip_duals_are_suppressed(default_config, e1_request) -> None:
     assert result.reduced_costs is None
 
 
-def test_backend_is_registered_with_lp_and_mip_capabilities() -> None:
+def test_backend_is_registered_with_lp_mip_and_qp_capabilities() -> None:
     registration = default_registry.get(ComponentKind.SOLVER_BACKEND, "highs", "1")
     assert registration.component_class is HighsBackend
-    assert registration.metadata["capabilities"] == frozenset({Capability.LP, Capability.MIP})
-    assert HighsBackend().capabilities == frozenset({Capability.LP, Capability.MIP})
+    expected = frozenset({Capability.LP, Capability.MIP, Capability.CONTINUOUS_QP})
+    assert registration.metadata["capabilities"] == expected
+    assert HighsBackend().capabilities == expected
 
 
 def test_repeated_compile_and_solve_is_deterministic(default_config, e1_request) -> None:

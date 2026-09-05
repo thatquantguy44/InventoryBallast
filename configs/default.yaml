@@ -1,8 +1,9 @@
 # Package defaults (lowest precedence layer, Section 8.1).
 #
-# This is the Phase 0A subset of the full default.yaml shown in 01_SPEC.md Section 8.3.
-# `objective`, `constraints`, `schedules`, `collateral`, and `scenarios` sections are added when
-# their owning subsystems land; until then InventoryOptimizerConfig rejects them.
+# This is the Phase 0A subset of the full default.yaml shown in 01_SPEC.md Section 8.3, plus
+# `objective` (T18; Phase 4 QP). `constraints`, `schedules`, `collateral`, and `scenarios` sections
+# are still added when their owning subsystems land; until then InventoryOptimizerConfig rejects
+# them.
 
 desk:
   problem_family: securities_lending_inventory
@@ -36,3 +37,6 @@ elasticity:
   curve: constant
   fee_floor: 1.0e-6
   uncertainty_haircut_sigma: 1.0
+
+objective:
+  allocation_stability_penalty: 0.0

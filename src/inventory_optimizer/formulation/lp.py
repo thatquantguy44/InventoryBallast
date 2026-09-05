@@ -38,7 +38,7 @@ from inventory_optimizer.exceptions import InputValidationError, ValidationIssue
 from inventory_optimizer.formulation.compiled import CompiledProblem
 from inventory_optimizer.formulation.compiler_support import (
     mip_required_issues,
-    needs_mip,
+    qp_required_issues,
     resolve_component,
     set_route_bounds,
 )
@@ -57,11 +57,13 @@ REQUIRED_OBJECTIVES: tuple[str, ...] = ("fee_revenue", "transition_cost")
 
 
 def compile_lp(request: OptimizationRequest, config: InventoryOptimizerConfig) -> CompiledProblem:
-    if needs_mip(request):
-        # Section 14.1: fail closed rather than silently ignore all_or_none/lot_size_shares/
-        # minimum_active_quantity_shares/maximum_active_routes -- use formulation.mip.compile_mip
-        # (or InventoryOptimizer.optimize(), which routes there automatically) instead.
-        raise InputValidationError(mip_required_issues(request))
+    # Sections 14.1/14.2: fail closed rather than silently ignore all_or_none/lot_size_shares/
+    # minimum_active_quantity_shares/maximum_active_routes (use formulation.mip.compile_mip) or a
+    # positive allocation_stability_penalty (use formulation.qp.compile_qp) -- or
+    # InventoryOptimizer.optimize(), which routes to either automatically.
+    issues = mip_required_issues(request) + qp_required_issues(config)
+    if issues:
+        raise InputValidationError(issues)
 
     context = build_context(request, config)
     builder = SparseBuilder(context.variable_index)
@@ -70,7 +72,7 @@ def compile_lp(request: OptimizationRequest, config: InventoryOptimizerConfig) -
 
     all_names = (*REQUIRED_CONSTRAINTS, *REQUIRED_OBJECTIVES, *config.desk.enabled_components)
     component_names = list(dict.fromkeys(all_names))
-    resolved = [resolve_component(name) for name in component_names]
+    resolved = [resolve_component(name, formulation=Formulation.LP) for name in component_names]
     instances = [
         (kind, registration, registration.component_class())
         for kind, registration in resolved
