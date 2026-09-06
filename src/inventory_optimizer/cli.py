@@ -20,8 +20,11 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
+from inventory_optimizer.adapters.csv_io import write_tables
 from inventory_optimizer.domain.enums import SolverStatus
 from inventory_optimizer.domain.requests import OptimizationRequest
+from inventory_optimizer.domain.results import OptimizationResult
+from inventory_optimizer.domain.scenario_results import ScenarioComparison, StressTestReport
 from inventory_optimizer.domain.scenarios import Scenario
 from inventory_optimizer.exceptions import (
     AttributionMismatchError,
@@ -31,6 +34,12 @@ from inventory_optimizer.exceptions import (
     ScenarioApplicationError,
 )
 from inventory_optimizer.facade import InventoryOptimizer, load_config
+from inventory_optimizer.reporting.tables import (
+    RunSummaryLayout,
+    result_tables,
+    scenario_tables,
+    stress_tables,
+)
 from inventory_optimizer.scenarios.runner import run_scenarios
 from inventory_optimizer.validation import validate_request
 
@@ -193,6 +202,50 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
     return EXIT_SUCCESS if all_passed else EXIT_INTERNAL_ERROR
 
 
+def _cmd_tables(args: argparse.Namespace) -> int:
+    """Flatten a previously-emitted result/comparison/stress JSON into one CSV per table
+    (specs/0008-tabular-result-output/). Reads what ``optimize``/``scenarios`` already write rather
+    than re-solving, so it composes with them and works on results saved from earlier runs."""
+    if args.run_summary_layout is not None and args.kind != "result":
+        _eprint(
+            f"invalid input: --run-summary-layout applies only to --kind result, not "
+            f"{args.kind!r}; omit it or pass --kind result"
+        )
+        return EXIT_INVALID_INPUT
+
+    try:
+        raw = json.loads(Path(args.input).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        _eprint(f"invalid input: could not read/parse {args.input!r}: {exc}")
+        return EXIT_INVALID_INPUT
+
+    try:
+        if args.kind == "result":
+            layout = RunSummaryLayout(args.run_summary_layout or RunSummaryLayout.WIDE.value)
+            tables = result_tables(
+                OptimizationResult.model_validate(raw), run_summary_layout=layout
+            )
+        elif args.kind == "scenarios":
+            payload = raw if isinstance(raw, list) else [raw]
+            tables = scenario_tables(
+                [ScenarioComparison.model_validate(item) for item in payload]
+            )
+        else:
+            tables = stress_tables(StressTestReport.model_validate(raw))
+    except Exception as exc:  # pydantic.ValidationError: wrong shape for the declared --kind
+        _eprint(f"invalid input: {args.input!r} is not a valid {args.kind} payload: {exc}")
+        return EXIT_INVALID_INPUT
+
+    try:
+        written = write_tables(tables, Path(args.output_dir))
+    except OSError as exc:
+        _eprint(f"internal error: could not write to {args.output_dir!r}: {exc}")
+        return EXIT_INTERNAL_ERROR
+
+    print(json.dumps([str(path) for path in written], indent=2))
+    return EXIT_SUCCESS
+
+
 def _load_scenarios(scenario_path: str) -> tuple[tuple[Scenario, ...], bool] | None:
     """Returns ``(scenarios, was_single_object)`` or ``None`` (after printing a diagnostic) on
     any load/parse/validation failure. A scenario file is either one ``Scenario`` object or a
@@ -272,6 +325,24 @@ def _build_parser() -> argparse.ArgumentParser:
     p_scenarios.add_argument("--config", help="Path to a YAML config file (the 'run' layer).")
     p_scenarios.add_argument("--output", help="Write the comparison JSON here, not stdout.")
 
+    p_tables = sub.add_parser(
+        "tables", help="Flatten a saved result/comparison/stress JSON into one CSV per table."
+    )
+    p_tables.add_argument("--input", required=True, help="Path to a JSON file this CLI emitted.")
+    p_tables.add_argument("--output-dir", required=True, help="Directory to write CSV files into.")
+    p_tables.add_argument(
+        "--kind",
+        default="result",
+        choices=("result", "scenarios", "stress"),
+        help="Which payload --input holds (default: result).",
+    )
+    p_tables.add_argument(
+        "--run-summary-layout",
+        choices=tuple(layout.value for layout in RunSummaryLayout),
+        help="Shape of the run summary table: one wide row (default) or long key/value pairs. "
+        "Applies to --kind result only.",
+    )
+
     p_components = sub.add_parser("components", help="List every registered component.")
     p_components.add_argument("--output", help="Write JSON output here instead of stdout.")
 
@@ -285,6 +356,7 @@ _DISPATCH = {
     "validate": _cmd_validate,
     "optimize": _cmd_optimize,
     "scenarios": _cmd_scenarios,
+    "tables": _cmd_tables,
     "components": _cmd_components,
     "doctor": _cmd_doctor,
 }

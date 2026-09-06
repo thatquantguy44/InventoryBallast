@@ -6,7 +6,7 @@
 > Ordered, testable units of work. Every task cites the requirement(s) it advances
 > and carries a Definition of Done. No task without a requirement.
 
-**Status note:** this entire file is a draft. Every task below is `todo`; none of this spec is
+**Status note:** approved; implementation in progress. Every task below starts `todo`; none of this spec is
 built yet.
 
 ## Definition of Done (applies to every task)

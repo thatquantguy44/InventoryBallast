@@ -1,7 +1,7 @@
 # Plan: Discrete fee-tier pricing (joint fee/quantity, Phase 5 item 1)
 
 - **Spec:** 0009-discrete-fee-tier-pricing (`spec.md`)
-- **Status:** Draft
+- **Status:** Approved
 - **Author:** Joshua Lutkemuller, CFA (drafted by Claude Code)
 - **Last updated:** 2026-09-05
 

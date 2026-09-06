@@ -20,13 +20,40 @@ directly avoids a needless duplicate mirror.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping
 from types import MappingProxyType
+from typing import Annotated
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_serializer
+from pydantic import (
+    AwareDatetime,
+    BaseModel,
+    BeforeValidator,
+    ConfigDict,
+    Field,
+    field_serializer,
+)
 
 from inventory_optimizer.domain.enums import ProblemFamily, ReasonCode, SolverStatus
 from inventory_optimizer.platform.context import PlatformInvocationContext
+
+
+def _null_to_negative_infinity(value: object) -> object:
+    return -math.inf if value is None else value
+
+
+def _null_to_positive_infinity(value: object) -> object:
+    return math.inf if value is None else value
+
+
+# JSON has no infinity literal, so Pydantic serializes an infinite float as ``null``. Without these
+# validators the result could not be read back from the JSON it just emitted -- a real round-trip
+# defect this repo never exercised (nothing read an OptimizationResult back until the ``tables`` CLI
+# subcommand, specs/0008-tabular-result-output/). Because these fields are non-optional floats,
+# ``null`` on the wire can only have come from an infinity, so the mapping is unambiguous. Emitted
+# JSON is unchanged; only reading is repaired.
+UnboundedBelow = Annotated[float, BeforeValidator(_null_to_negative_infinity)]
+UnboundedAbove = Annotated[float, BeforeValidator(_null_to_positive_infinity)]
 
 
 class RowIdentifier(BaseModel):
@@ -142,8 +169,8 @@ class ConstraintActivity(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     row: RowIdentifier
-    lower: float
-    upper: float
+    lower: UnboundedBelow
+    upper: UnboundedAbove
     activity: float
     slack: float
     dual_value: float | None = None
@@ -173,10 +200,10 @@ class VerificationSection(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     has_primal: bool
-    max_variable_bound_violation: float
-    max_row_violation: float
-    max_integrality_violation: float
-    objective_reconstruction_delta: float
+    max_variable_bound_violation: UnboundedAbove
+    max_row_violation: UnboundedAbove
+    max_integrality_violation: UnboundedAbove
+    objective_reconstruction_delta: UnboundedAbove
     passed: bool
 
 

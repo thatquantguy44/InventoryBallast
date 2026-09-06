@@ -1,9 +1,9 @@
 # Spec: Discrete fee-tier pricing (joint fee/quantity, Phase 5 item 1)
 
 - **ID:** 0009-discrete-fee-tier-pricing
-- **Status:** Draft
+- **Status:** Approved (implementation sequenced after `specs/0008-tabular-result-output/`)
 - **Author:** Joshua Lutkemuller, CFA (drafted by Claude Code)
-- **Approver:**
+- **Approver:** Joshua Lutkemuller, CFA (2026-09-05 — resolved all three blocking design questions: price recommendations carry the same governance structure as allocation recommendations (RISK-003); "do not lend at any offered price" is a legitimate outcome, keeping `sum_k z_gk <= 1`; and the optimizer never invents candidate prices. Directed that `0008` be built first.)
 - **Last updated:** 2026-09-05
 
 > WHAT and WHY only. No implementation detail — that belongs in `plan.md`.
@@ -100,7 +100,10 @@ and the only approximation is which prices were offered as candidates. That dist
   candidates. The model evaluates only the fees supplied.
 - **Choosing the candidate tiers for the caller** — no tier-grid generation, no "search around the
   current fee" heuristic. The desk (or an upstream pricing service) supplies the menu; inventing
-  candidate prices inside the optimizer would be pricing policy hiding in a solver.
+  candidate prices inside the optimizer would be pricing policy hiding in a solver. **Confirmed by
+  owner (2026-09-05):** the optimizer never invents candidate prices. It is a chooser, not a
+  pricer, and "optimal" therefore means "best of the prices offered" — which is why REQ-007 reports
+  the menu alongside the selection.
 - **Reporting a distance-to-continuous-optimum error bound** — computing it means optimizing the
   continuous revenue curve, i.e. the very nonlinear problem this spec avoids. The results disclose
   the candidate grid and the selection instead, which is the honest statement of what was actually
@@ -174,7 +177,7 @@ and the only approximation is which prices were offered as candidates. That dist
 | --- | --- | --- | --- |
 | RISK-001 | Per-route-per-tier quantity variables multiply the model: a tiered group with `J` routes and `K` tiers adds `J*K` continuous variables plus `K` binaries. | A desk that tiers many groups with long fee ladders could slow solves materially versus today's LP. | Tiers are strictly opt-in per demand group and contribute nothing when absent (NFR-001), so the cost is paid only where repricing is actually being evaluated. `plan.md` proposes a `slow`-marked scale test establishing the shape of the growth, following `specs/0005-test-hardening/`'s benchmark precedent. |
 | RISK-002 | Composite `(route, tier)` variable scope identifiers break the reversible index mapping if a domain ID contains the separator. | An ambiguous key would silently mis-map a variable to the wrong route — a correctness failure, not a cosmetic one. | REQ-008 makes it a validated, fail-closed rejection rather than a convention nobody enforces; AC-008 pins the behavior. |
-| RISK-003 | The optimizer recommending a *price* is a materially different act from recommending a *quantity*: it may cross desk pricing authority, client agreements, or approval workflows that today assume fees are given. | A repricing recommendation could be actioned as though it carried the same authorization as an allocation recommendation. | `GOV-003` already holds every result to being "recommendations requiring downstream authorization", and §12.4 requires "one-price-per-group behavior must be explicit". REQ-007's disclosure (menu plus selection) is what makes the price recommendation reviewable rather than implicit. Flagged here so approval treats pricing output as its own governance question, not a free rider on allocation output. |
+| RISK-003 | The optimizer recommending a *price* is a materially different act from recommending a *quantity*: it may cross desk pricing authority, client agreements, or approval workflows that today assume fees are given. | A repricing recommendation could be actioned as though it carried the same authorization as an allocation recommendation. | **Resolved by owner decision (2026-09-05): a price recommendation carries the same governance structure as an allocation recommendation.** `GOV-003`'s existing "recommendations requiring downstream authorization" path therefore applies unchanged — no separate approval flow, no distinct result flag. REQ-007's disclosure (menu plus selection) remains required so the recommended price is reviewable rather than implicit, and §12.4's "one-price-per-group behavior must be explicit" is satisfied structurally by the `PricingSelection` section. |
 | RISK-004 | Discrete tiers can only be as good as the menu supplied; a desk may read "optimal" as "optimal price" rather than "best of the prices offered". | Overstated confidence in a recommendation that never considered the true continuous optimum. | The Problem & Context distinction (exact-within-candidates, not interpolated) is carried into the result surface (REQ-007) and the Non-Goals: the optimizer reports the menu it was given and never generates candidates itself. |
 
 ## Assumptions & Open Questions
@@ -182,9 +185,11 @@ and the only approximation is which prices were offered as candidates. That dist
 - Assumption: tiers belong to the demand group (borrower × security), not the route, matching
   §12.2's aggregation rule. Routes in a tiered group continue to share one borrower fee — the
   selected one.
-- Assumption: `sum_k z_gk <= 1` (§12.4's literal inequality) rather than `= 1`, so "sell nothing to
-  this group" stays feasible; a group whose every tier is uneconomic can simply go unselected with
-  all its route quantities at zero.
+- **Confirmed by owner (2026-09-05)**, previously an assumption: `sum_k z_gk <= 1` (§12.4's literal
+  inequality) rather than `= 1`. "Do not lend to this borrower at any offered price" is a
+  legitimate optimizer outcome — a group whose every tier is uneconomic goes unselected with all
+  its route quantities at zero, rather than being forced into a knowingly unprofitable trade or
+  reported as infeasible.
 - Assumption: `route.fee_rate` remains the incumbent price and continues to anchor
   `fee_revenue`'s baseline, with the new term carrying the delta (NFR-003). This keeps attribution
   readable as "revenue at today's price, plus what repricing added".

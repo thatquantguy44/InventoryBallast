@@ -1,9 +1,9 @@
 # Spec: Tabular result output (reporting tables + adapters layer)
 
 - **ID:** 0008-tabular-result-output
-- **Status:** Draft
+- **Status:** Approved
 - **Author:** Joshua Lutkemuller, CFA (drafted by Claude Code)
-- **Approver:**
+- **Approver:** Joshua Lutkemuller, CFA (2026-09-05 — "0008 first", sequencing this ahead of `specs/0009-discrete-fee-tier-pricing/`; the spec's remaining questions were accepted at their proposed defaults, including the saved-JSON `tables` input shape, the long-format evidence table, and deferring the full `ARC-004` layer-matrix import test)
 - **Last updated:** 2026-09-05
 
 > WHAT and WHY only. No implementation detail — that belongs in `plan.md`.

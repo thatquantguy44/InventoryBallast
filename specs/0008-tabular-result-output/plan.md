@@ -1,7 +1,7 @@
 # Plan: Tabular result output (reporting tables + adapters layer)
 
 - **Spec:** 0008-tabular-result-output (`spec.md`)
-- **Status:** Draft
+- **Status:** Approved
 - **Author:** Joshua Lutkemuller, CFA (drafted by Claude Code)
 - **Last updated:** 2026-09-05
 
