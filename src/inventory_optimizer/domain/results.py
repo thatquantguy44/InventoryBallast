@@ -148,6 +148,23 @@ class DemandSummary(BaseModel):
     reason_code: ReasonCode | None = None
 
 
+class PricingSelection(BaseModel):
+    """One tiered demand group's Section 12.4 pricing menu and the tier the optimizer selected
+    (specs/0009-discrete-fee-tier-pricing/, REQ-007), satisfying Section 14.3's disclosure duty to
+    record the candidate breakpoints and the selection made among them. ``selected_fee_rate``/
+    ``selected_tier_index`` are ``None`` when no tier was selected -- "don't lend to this borrower
+    at any offered price" is a legitimate outcome, not an error."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    demand_group_id: str
+    reference_fee_rate: float
+    candidate_fee_rates: tuple[float, ...]
+    selected_fee_rate: float | None
+    selected_tier_index: int | None
+    filled_shares: float
+
+
 class DeskSummary(BaseModel):
     """Section 18.1 "Desk": problem family, desk/legal entity, attribution scope, and which
     optional family components ran. Mirrors ``domain.requests.DeskContext`` plus
@@ -234,6 +251,9 @@ class OptimizationResult(BaseModel):
     balances: tuple[BalanceRecord, ...]
     economics: EconomicsSummary
     demand: tuple[DemandSummary, ...]
+    # Additive, defaulted (specs/0009-discrete-fee-tier-pricing/): empty for every request with no
+    # tiered demand group, so no pre-existing result or test is affected.
+    pricing: tuple[PricingSelection, ...] = ()
     schedules: None = None
     collateral: None = None
     desk: DeskSummary | None = None

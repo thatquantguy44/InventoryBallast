@@ -76,9 +76,11 @@ Per `specs/spec002/00_PLAN.md`'s status line and `TRACEABILITY.md`:
   against the normative "Testing Strategy" section found `hypothesis` (a pinned
   dev dependency since T01) had never actually been used; `specs/0005-test-
   hardening/` closes that and four other real gaps — see its entry below.
-- **Approved, not yet implemented:** `specs/0009-discrete-fee-tier-pricing/`
-  (Phase 5 item 1, discrete form) — owner sign-off 2026-09-05; see "How to
-  actually start" below.
+- **Approved, implementation in progress (started 2026-09-06):**
+  `specs/0009-discrete-fee-tier-pricing/` (Phase 5 item 1, discrete form) —
+  owner sign-off 2026-09-05; see "How to actually start" below and this
+  spec's own `tasks.md` (which tracks per-task status precisely) for exactly
+  where to resume.
 - **Not yet started:** Phase 5 item 2 (multi-period settlement/scenario-tree
   extensions; `01_SPEC.md` §13) — see "Next priorities" below.
 
@@ -342,10 +344,12 @@ across periods. `mean_variance.MeanVarianceOptimizer` is closed-form Markowitz
 with no box bounds. Both are toy-scale conceptual references at best, matching
 the earlier `solve_lp`/`solve_milp` verdict.
 
-### Phase 5 item 1 — discrete fee-tier pricing (`01_SPEC.md` §12.4) — drafted, not started
+### Phase 5 item 1 — discrete fee-tier pricing (`01_SPEC.md` §12.4) — approved, implementation in progress
 
-`specs/0009-discrete-fee-tier-pricing/` (`spec.md`, `plan.md`, `tasks.md`) — a
-**Draft** spec, not approved and not implemented.
+`specs/0009-discrete-fee-tier-pricing/` (`spec.md`, `plan.md`, `tasks.md`) — **Approved**
+(owner sign-off 2026-09-05, all three blocking design questions resolved). Implementation
+started 2026-09-06 on branch `0009-discrete-fee-tier-pricing`; see "How to actually start"
+below and this spec's own `tasks.md` for the exact per-task state.
 
 The key finding that shaped it: **§12.4 already specifies this formulation
 normatively** ("Discrete price-selection MIP": binary `z_gk` per candidate fee
@@ -543,14 +547,34 @@ HiGHS/`CompiledProblem` stack — not a replacement for it. Verified concretely
 rules), Phase 4 (QP allocation-stability), and the tabular result output spec
 are all done** (2026-09-04, 2026-09-05 ×5, 2026-09-06) — see above.
 
-**Next up: `specs/0009-discrete-fee-tier-pricing/` is Approved (owner sign-off
-2026-09-05) but not yet implemented** — all three blocking design questions
+**In progress: `specs/0009-discrete-fee-tier-pricing/` is Approved (owner sign-off
+2026-09-05) and implementation started 2026-09-06** on branch
+`0009-discrete-fee-tier-pricing` — all three blocking design questions
 were resolved (RISK-003: price recommendations carry the same governance as
 allocation recommendations; the tier-selection row stays `<=` not `=`, so
 "don't lend at any offered price" is a legitimate outcome; the optimizer never
-invents candidate prices). This is the natural next task: the spec chain is
-already approved and traced, so it needs implementation against `plan.md`'s
-task list, not more design work.
+invents candidate prices).
+
+**Resume here.** `tasks.md` T-001 through T-006 are `done`: the
+`DemandForecast.candidate_fee_rates` field, `formulation/context.py`'s
+`tiered_demand_group_ids`/`tier_caps`/`"t"`/`"w"` variable blocks and shared
+`tier_scope_id`/`route_tier_scope_id` key encoding, the new
+`components/constraints/fee_tiers.py::FeeTierConstraint` and
+`components/objective_terms/tier_pricing.py::TierPricingTerm`, the
+`needs_mip`/`mip_required_issues`/`formulation/mip.py` wiring, and
+`domain/results.py::PricingSelection` plus its `reporting/result_builder.py`
+population. Manually smoke-tested end to end through
+`InventoryOptimizer.optimize()` against `plan.md`'s worked `epsilon=0.5`
+fixture (reproduces `D=70.71, rev=0.1414`, tier `0.072` selected, exactly);
+the full pre-existing suite (220 passed, 2 skipped) still passes unchanged.
+**Not done yet:** T-007 (the `slow`-marked `J*K` scale test), T-008 (the real
+`tests/golden/test_fee_tier_pricing.py` / `tests/unit/test_fee_tier_compiler.py`
+/ `tests/unit/test_domain_contracts.py` additions this spec's ACs actually
+cite — no acceptance criterion is met until its named test exists and
+passes), T-009 (`specs/spec002/TRACEABILITY.md`'s `LP-004`/`LP-009` rows), and
+T-010 (this file and `specs/README.md`, once T-007-T-009 are done). Start at
+T-008 — see `tasks.md`'s Test Coverage Map and `plan.md`'s worked fixture
+table (note the supply-sufficiency trap flagged there on the AC-002 fixture).
 
 After that, Phase 5 item 2 (multi-period settlement and scenario-tree
 extensions) remains entirely unstarted and, unlike item 1, has no domain

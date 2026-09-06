@@ -6,8 +6,18 @@
 > Ordered, testable units of work. Every task cites the requirement(s) it advances
 > and carries a Definition of Done. No task without a requirement.
 
-**Status note:** approved 2026-09-05, sequenced after `0008`. Every task below is `todo`; none of this spec is
-built yet.
+**Status note:** approved 2026-09-05, sequenced after `0008`. **Implementation started
+2026-09-06** on branch `0009-discrete-fee-tier-pricing`: T-001 through T-006 (the domain field,
+`BuildContext` plumbing, both new components, MIP-compiler wiring, and result reporting) are
+`done` and manually smoke-tested end to end through `InventoryOptimizer.optimize()` against
+`plan.md`'s worked `epsilon=0.5` fixture (reproduces the documented `D=70.71, rev=0.1414, tier
+0.072 wins` values exactly, `verification.passed=True`, attribution reconciles with zero
+mismatch). The full pre-existing suite (220 passed, 2 skipped) still passes unchanged after these
+six tasks -- a first, informal NFR-001 signal, but **not yet a substitute for T-008's own tests**.
+T-007 (scale test), T-008 (the golden/unit test files this spec's ACs actually cite), T-009
+(`TRACEABILITY.md`), and T-010 (`docs/handoff.md`/`specs/README.md`) are still `todo` -- resume
+there. No acceptance criterion is considered met until its named test in the Test Coverage Map
+below exists and passes.
 
 ## Definition of Done (applies to every task)
 
@@ -26,16 +36,16 @@ built yet.
 
 | ID | Task | Covers | Status | Notes |
 | --- | --- | --- | --- | --- |
-| T-001 | Add `DemandForecast.candidate_fee_rates: tuple[float, ...] = ()` with a validator requiring strictly positive, strictly increasing, duplicate-free values. | REQ-001 | todo | Optional and empty by default; an untiered forecast is byte-identical to today's. |
-| T-002 | Extend `formulation/context.py`: compute `tiered_demand_group_ids` and `tier_caps` (one `EvaluatedDemand` per candidate fee via the unchanged `evaluate_demand_cap`), and append the empty-when-unused `"t"`/`"w"` variable blocks. | REQ-002, REQ-003 | todo | Elasticity stays preprocessing (§12.1); `evaluate_demand_cap` itself is not modified. |
-| T-003 | Add `components/constraints/fee_tiers.py::FeeTierConstraint` (rows `tier_select`, `tier_capacity`, `tier_split`, plus the reserved-separator validation), and add the tiered-group skip to `components/constraints/demand.py`. | REQ-004, REQ-008, REQ-010 | todo | The `demand_cap` skip is the one baseline-component change; it is guarded and inert without tiers. |
-| T-004 | Add `components/objective_terms/tier_pricing.py::TierPricingTerm` contributing `P*tau*s_j*(f_gk - f_j^ref)` per `w_jk`, with `attribute()` recomputing the same and reporting a zero baseline. | REQ-005 | todo | Delta construction leaves `fee_revenue` untouched; the variable-cost term cancels, so coefficients are hand-checkable. |
-| T-005 | Extend `formulation/compiler_support.py` (`needs_mip`, `mip_required_issues`) and `formulation/mip.py`'s component tuples. | REQ-006 | todo | One clause each; `compile_lp`'s rejection and the facade's dispatch then work with no further edits. |
-| T-006 | Add `domain/results.py::PricingSelection` and the defaulted `OptimizationResult.pricing` section; populate it in `reporting/result_builder.py`. | REQ-007 | todo | Additive and defaulted, so existing results/tests are unaffected. |
+| T-001 | Add `DemandForecast.candidate_fee_rates: tuple[float, ...] = ()` with a validator requiring strictly positive, strictly increasing, duplicate-free values. | REQ-001 | done | Optional and empty by default; an untiered forecast is byte-identical to today's. Also caps a group at 1000 tiers (validated, not assumed), matching the zero-padded index's range. |
+| T-002 | Extend `formulation/context.py`: compute `tiered_demand_group_ids` and `tier_caps` (one `EvaluatedDemand` per candidate fee via the unchanged `evaluate_demand_cap`), and append the empty-when-unused `"t"`/`"w"` variable blocks. | REQ-002, REQ-003 | done | Elasticity stays preprocessing (§12.1); `evaluate_demand_cap` itself is not modified. Also added `TIER_SEPARATOR`/`tier_scope_id`/`route_tier_scope_id` here as the one shared composite-key encoding, reused by T-003/T-004/T-006. |
+| T-003 | Add `components/constraints/fee_tiers.py::FeeTierConstraint` (rows `tier_select`, `tier_capacity`, `tier_split`, plus the reserved-separator validation), and add the tiered-group skip to `components/constraints/demand.py`. | REQ-004, REQ-008, REQ-010 | done | The `demand_cap` skip is the one baseline-component change; it is guarded and inert without tiers. |
+| T-004 | Add `components/objective_terms/tier_pricing.py::TierPricingTerm` contributing `P*tau*s_j*(f_gk - f_j^ref)` per `w_jk`, with `attribute()` recomputing the same and reporting a zero baseline. | REQ-005 | done | Delta construction leaves `fee_revenue` untouched; implemented as `fee_revenue_coefficient(route_at_tier) - fee_revenue_coefficient(route)` via `route.model_copy(update={"fee_rate": ...})`, so the variable-cost cancellation is guaranteed by reuse rather than re-derived. |
+| T-005 | Extend `formulation/compiler_support.py` (`needs_mip`, `mip_required_issues`) and `formulation/mip.py`'s component tuples. | REQ-006 | done | One clause each; `compile_lp`'s rejection and the facade's dispatch then work with no further edits. `mip.py` also gained the `"t"` block's integrality marking (binary), alongside `z`/`n`. |
+| T-006 | Add `domain/results.py::PricingSelection` and the defaulted `OptimizationResult.pricing` section; populate it in `reporting/result_builder.py`. | REQ-007 | done | Additive and defaulted, so existing results/tests are unaffected. `reference_fee_rate` mirrors `_compute_demand_caps`'s own incumbent-fee fallback (group's shared route fee, else the forecast's own reference). |
 | T-007 | Add a `slow`-marked scale test sizing the `J*K` variable growth. | REQ-003 | todo | RISK-001; follows `specs/0005-test-hardening/`'s benchmark precedent. |
-| T-008 | Tests: `tests/golden/test_fee_tier_pricing.py`, `tests/unit/test_fee_tier_compiler.py`, and `tests/unit/test_domain_contracts.py` additions. Confirm all pre-existing tests still pass (AC-009). | REQ-001 through REQ-010, NFR-001 through NFR-004 | todo | See Test Coverage Map, and `plan.md`'s worked fixture table — note the supply-sufficiency trap on the AC-002 fixture. |
-| T-009 | Update `specs/spec002/TRACEABILITY.md`: `LP-004` gains discrete-pricing evidence; `LP-009` gains the §12.4 / §14.1-seventh-trigger portion, with continuous nonlinear pricing and PWL interpolation explicitly still `SPECIFIED`. | REQ-001 through REQ-010 | todo | Mirrors the partial-status honesty already used for `LP-008`/`PLT-002`/`VER-005`. |
-| T-010 | Update `docs/handoff.md` and `specs/README.md`: record this spec, note that Phase 3's deferred rate-ladder item and §14.1's seventh MIP trigger are closed by it, and restate what Phase 5 still leaves open (continuous NLP, multi-period). | REQ-001 through REQ-010 | todo | Phase 5 is *not* complete when this ships — only its item 1, in discrete form. |
+| T-008 | Tests: `tests/golden/test_fee_tier_pricing.py`, `tests/unit/test_fee_tier_compiler.py`, and `tests/unit/test_domain_contracts.py` additions. Confirm all pre-existing tests still pass (AC-009). | REQ-001 through REQ-010, NFR-001 through NFR-004 | todo | See Test Coverage Map, and `plan.md`'s worked fixture table — note the supply-sufficiency trap on the AC-002 fixture. **Resume here** — this is the next task. |
+| T-009 | Update `specs/spec002/TRACEABILITY.md`: `LP-004` gains discrete-pricing evidence; `LP-009` gains the §12.4 / §14.1-seventh-trigger portion, with continuous nonlinear pricing and PWL interpolation explicitly still `SPECIFIED`. | REQ-001 through REQ-010 | todo | Mirrors the partial-status honesty already used for `LP-008`/`PLT-002`/`VER-005`. Do this only after T-008's tests actually pass — evidence pointers must cite real, passing tests. |
+| T-010 | Update `docs/handoff.md` and `specs/README.md`: record this spec, note that Phase 3's deferred rate-ladder item and §14.1's seventh MIP trigger are closed by it, and restate what Phase 5 still leaves open (continuous NLP, multi-period). | REQ-001 through REQ-010 | todo | Phase 5 is *not* complete when this ships — only its item 1, in discrete form. Last task; do after T-007/T-008/T-009. |
 
 Status values: `todo` | `in-progress` | `blocked` | `done`.
 

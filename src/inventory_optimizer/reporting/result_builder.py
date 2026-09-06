@@ -24,10 +24,12 @@ from inventory_optimizer.domain.results import (
     EconomicsSummary,
     ObjectiveAttributionRecord,
     OptimizationResult,
+    PricingSelection,
     RowIdentifier,
     SolverDiagnostics,
     VerificationSection,
 )
+from inventory_optimizer.formulation.context import route_tier_scope_id, tier_scope_id
 from inventory_optimizer.formulation.indexes import VariableKey
 from inventory_optimizer.platform.context import PlatformInvocationContext
 from inventory_optimizer.reporting.attribution import attribute_objective
@@ -154,6 +156,58 @@ def _build_demand(solution: VerifiedSolution) -> tuple[DemandSummary, ...]:
     return tuple(records)
 
 
+def _build_pricing(solution: VerifiedSolution) -> tuple[PricingSelection, ...]:
+    """Section 14.3's disclosure duty for Section 12.4's discrete fee-tier pricing
+    (specs/0009-discrete-fee-tier-pricing/, REQ-007): the menu offered and the tier selected, per
+    tiered demand group. Empty whenever no request has any tiered group -- the common case."""
+    context = solution.context
+    if not solution.verification.has_primal or not context.tiered_demand_group_ids:
+        return ()
+
+    demand_by_group = {forecast.demand_group_id: forecast for forecast in context.request.demand}
+    records: list[PricingSelection] = []
+    for group_id in sorted(context.tiered_demand_group_ids):
+        forecast = demand_by_group[group_id]
+        routes = context.routes_by_demand_group.get(group_id, ())
+        # Mirrors formulation.context._compute_demand_caps's own convention: the incumbent fee is
+        # the group's shared route fee_rate when routes exist, else the forecast's own reference.
+        reference_fee_rate = routes[0].fee_rate if routes else forecast.reference_fee_rate
+
+        selected_tier_index: int | None = None
+        for tier_index in range(len(forecast.candidate_fee_rates)):
+            t_value = solution.primal_at(VariableKey("t", tier_scope_id(group_id, tier_index)))
+            if t_value > 0.5:
+                selected_tier_index = tier_index
+                break
+
+        selected_fee_rate = (
+            forecast.candidate_fee_rates[selected_tier_index]
+            if selected_tier_index is not None
+            else None
+        )
+        filled_shares = (
+            sum(
+                solution.primal_at(
+                    VariableKey("w", route_tier_scope_id(route.route_id, selected_tier_index))
+                )
+                for route in routes
+            )
+            if selected_tier_index is not None
+            else 0.0
+        )
+        records.append(
+            PricingSelection(
+                demand_group_id=group_id,
+                reference_fee_rate=reference_fee_rate,
+                candidate_fee_rates=forecast.candidate_fee_rates,
+                selected_fee_rate=selected_fee_rate,
+                selected_tier_index=selected_tier_index,
+                filled_shares=filled_shares,
+            )
+        )
+    return tuple(records)
+
+
 def _build_desk(solution: VerifiedSolution) -> DeskSummary:
     context = solution.context
     desk_context = context.request.desk_context
@@ -258,6 +312,7 @@ def build_optimization_result(
         balances=_build_balances(solution),
         economics=_build_economics(solution),
         demand=_build_demand(solution),
+        pricing=_build_pricing(solution),
         desk=_build_desk(solution),
         constraints=_build_constraints(solution),
         solver=_build_solver_diagnostics(solution),

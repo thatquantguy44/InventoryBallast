@@ -2,6 +2,13 @@
 
 Always included (``formulation.lp.REQUIRED_CONSTRAINTS``); a demand group with no referencing
 routes simply contributes no row.
+
+A demand group carrying candidate fee tiers (specs/0009-discrete-fee-tier-pricing/) is skipped
+here (REQ-010): its capacity is enforced per tier instead, by
+``components.constraints.fee_tiers.FeeTierConstraint``'s ``tier_capacity`` row. This row's own cap
+is evaluated at the *incumbent* fee (``D_g(f^ref)``) -- wrong the moment a cheaper tier is
+selected, since a lower fee implies genuinely higher demand. The skip is guarded on
+``context.tiered_demand_group_ids`` and is inert for every untiered request (NFR-003).
 """
 
 from __future__ import annotations
@@ -29,6 +36,8 @@ class DemandCapConstraint:
 
     def contribute(self, context: BuildContext, builder: SparseBuilder) -> None:
         for forecast in context.request.demand:
+            if forecast.demand_group_id in context.tiered_demand_group_ids:
+                continue
             routes = context.routes_by_demand_group.get(forecast.demand_group_id, ())
             if not routes:
                 continue

@@ -79,8 +79,9 @@ def set_route_bounds(builder: SparseBuilder, route: LoanRoute) -> None:
 
 def needs_mip(request: OptimizationRequest) -> bool:
     """Section 14.1: "use MIP only when requested policy requires discrete variables." True when
-    any route needs all-or-none/lot-size/minimum-ticket activation, or any ``UtilizationPolicy``
-    sets a cardinality limit (``maximum_active_routes``)."""
+    any route needs all-or-none/lot-size/minimum-ticket activation, any ``UtilizationPolicy`` sets
+    a cardinality limit (``maximum_active_routes``), or any demand group carries candidate fee
+    tiers (Section 12.4's discrete price-selection MIP; specs/0009-discrete-fee-tier-pricing/)."""
     if any(
         route.all_or_none
         or route.lot_size_shares is not None
@@ -88,7 +89,9 @@ def needs_mip(request: OptimizationRequest) -> bool:
         for route in request.routes
     ):
         return True
-    return any(policy.maximum_active_routes is not None for policy in request.utilization_policies)
+    if any(policy.maximum_active_routes is not None for policy in request.utilization_policies):
+        return True
+    return any(forecast.candidate_fee_rates for forecast in request.demand)
 
 
 def mip_required_issues(request: OptimizationRequest) -> tuple[ValidationIssue, ...]:
@@ -141,6 +144,19 @@ def mip_required_issues(request: OptimizationRequest) -> tuple[ValidationIssue, 
                         "InventoryOptimizer.optimize()"
                     ),
                     location=f"utilization_policies[{index}].maximum_active_routes",
+                )
+            )
+    for index, forecast in enumerate(request.demand):
+        if forecast.candidate_fee_rates:
+            issues.append(
+                ValidationIssue(
+                    code="MIP_REQUIRED",
+                    message=(
+                        f"demand group {forecast.demand_group_id!r} sets candidate_fee_rates, "
+                        "which compile_lp cannot honor -- use compile_mip or "
+                        "InventoryOptimizer.optimize()"
+                    ),
+                    location=f"demand[{index}].candidate_fee_rates",
                 )
             )
     return tuple(issues)
