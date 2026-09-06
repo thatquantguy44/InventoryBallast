@@ -7,10 +7,12 @@ upstream data source yet (Schedules, Collateral, Sources) are explicitly ``None`
 
 from __future__ import annotations
 
+import math
 from datetime import UTC, datetime
 
 import pytest
 
+from inventory_optimizer.domain.results import OptimizationResult
 from inventory_optimizer.reporting.result_builder import build_optimization_result
 from inventory_optimizer.reporting.types import VerifiedSolution
 
@@ -71,3 +73,26 @@ def test_result_is_deterministic_given_the_same_inputs(e1_solution: VerifiedSolu
     )
 
     assert first == second
+
+
+def test_result_round_trips_through_its_own_json(e1_solution: VerifiedSolution) -> None:
+    """Regression (specs/0008-tabular-result-output/): JSON has no infinity literal, so Pydantic
+    serializes an unbounded ``ConstraintActivity.lower`` (E1's demand_cap rows are one-sided,
+    ``-inf``) as ``null``. Before the ``UnboundedBelow``/``UnboundedAbove`` validators, reading
+    that JSON back raised -- meaning `optimize --output result.json` had always written a file the
+    package itself could not parse. Nothing exercised this until the `tables` CLI subcommand read
+    a result back for the first time."""
+    result = build_optimization_result(
+        e1_solution,
+        run_id="run-test-round-trip",
+        created_at=datetime(2026, 9, 4, tzinfo=UTC),
+        config_hash="cfg-hash-test",
+        input_hash="input-hash-test",
+    )
+    demand_cap_rows = [c for c in result.constraints if c.row.kind == "demand_cap"]
+    assert demand_cap_rows and any(math.isinf(c.lower) for c in demand_cap_rows)
+
+    restored = OptimizationResult.model_validate_json(result.model_dump_json())
+
+    assert restored == result
+    assert restored.model_dump_json() == result.model_dump_json()

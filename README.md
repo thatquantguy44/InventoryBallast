@@ -32,6 +32,27 @@ import `highspy`); `agentic` pulls in the `quantsmith` package (see
 `docs/handoff.md` for what it's useful for here). Drop either extra for a
 lighter install if you only need a subset.
 
+## Tabular output
+
+`inventory-optimizer tables` flattens a saved `optimize`/`scenarios` result into one CSV per table
+(no extras required — the CSV path is standard library only):
+
+```bash
+inventory-optimizer optimize --request request.json --output result.json
+inventory-optimizer tables --input result.json --output-dir ./tables --kind result
+```
+
+`--kind` is `result` (default), `scenarios`, or `stress`, matching what `--input` holds.
+`--run-summary-layout wide|long` (default `wide`) selects one summary row per run, or long
+`run_id`/`key`/`value` pairs for appending many runs into one frame. For a pandas `DataFrame`
+instead of CSV, install the `dataframe` extra and call `adapters.dataframe.to_dataframe(table)`
+directly — `reporting.tables` builds the `Table` objects either output format reads from.
+
+**Table names and column order are a contract** (consumers index by them): the full, normative
+list of every table and its columns lives in
+[`specs/0008-tabular-result-output/plan.md`](specs/0008-tabular-result-output/plan.md)'s "Table
+catalogue" section. Changing a name or column is a breaking change, not a rename.
+
 ## Boundary rule
 
 Nothing under `src/inventory_optimizer/` may import `qr_haven` or any QR Haven-specific module.

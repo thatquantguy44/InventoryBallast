@@ -28,14 +28,14 @@ def _write_request(path: Path, request) -> None:
     path.write_text(request.model_dump_json())
 
 
-def test_help_lists_all_five_subcommands(capsys) -> None:
-    """AC-009."""
+def test_help_lists_all_six_subcommands(capsys) -> None:
+    """AC-009. `tables` (specs/0008-tabular-result-output/) joined the other five in T-006."""
     with pytest.raises(SystemExit) as exc_info:
         main(["--help"])
 
     assert exc_info.value.code == EXIT_SUCCESS
     output = capsys.readouterr().out
-    for verb in ("validate", "optimize", "scenarios", "components", "doctor"):
+    for verb in ("validate", "optimize", "scenarios", "tables", "components", "doctor"):
         assert verb in output
 
 
@@ -263,3 +263,92 @@ def test_scenarios_subcommand_appears_in_help(capsys) -> None:
     with pytest.raises(SystemExit):
         main(["--help"])
     assert "scenarios" in capsys.readouterr().out
+
+
+def _optimize_to_file(tmp_path: Path, request) -> Path:
+    request_path = tmp_path / "request.json"
+    _write_request(request_path, request)
+    output_path = tmp_path / "result.json"
+    exit_code = main(
+        ["optimize", "--request", str(request_path), "--output", str(output_path)]
+    )
+    assert exit_code == EXIT_SUCCESS
+    return output_path
+
+
+def test_tables_writes_csvs(tmp_path, e1_request) -> None:
+    """AC-008 (specs/0008-tabular-result-output/): the real optimize -> file -> tables path, the
+    same one that surfaced the OptimizationResult round-trip defect this spec also fixes."""
+    result_path = _optimize_to_file(tmp_path, e1_request)
+    output_dir = tmp_path / "tables"
+
+    exit_code = main(
+        ["tables", "--input", str(result_path), "--output-dir", str(output_dir)]
+    )
+
+    assert exit_code == EXIT_SUCCESS
+    for name in ("allocations", "balances", "demand", "constraints", "economics", "run_summary"):
+        assert (output_dir / f"{name}.csv").exists()
+
+
+def test_tables_rejects_unreadable_input(tmp_path, capsys) -> None:
+    """AC-008."""
+    exit_code = main(
+        [
+            "tables",
+            "--input",
+            str(tmp_path / "does_not_exist.json"),
+            "--output-dir",
+            str(tmp_path / "out"),
+        ]
+    )
+
+    assert exit_code == EXIT_INVALID_INPUT
+    assert "invalid input" in capsys.readouterr().err
+
+
+def test_tables_long_layout_writes_distinct_file(tmp_path, e1_request) -> None:
+    """AC-012: a file's name determines its schema."""
+    result_path = _optimize_to_file(tmp_path, e1_request)
+    output_dir = tmp_path / "tables"
+
+    exit_code = main(
+        [
+            "tables",
+            "--input",
+            str(result_path),
+            "--output-dir",
+            str(output_dir),
+            "--run-summary-layout",
+            "long",
+        ]
+    )
+
+    assert exit_code == EXIT_SUCCESS
+    assert (output_dir / "run_summary_long.csv").exists()
+    assert not (output_dir / "run_summary.csv").exists()
+    header = (output_dir / "run_summary_long.csv").read_text().splitlines()[0]
+    assert header == "run_id,key,value"
+
+
+def test_tables_rejects_layout_flag_for_non_result_kind(tmp_path, e1_request, capsys) -> None:
+    """AC-012: an explicit --run-summary-layout with a non-result --kind is rejected, not
+    silently ignored (constitution P4)."""
+    result_path = _optimize_to_file(tmp_path, e1_request)
+
+    exit_code = main(
+        [
+            "tables",
+            "--input",
+            str(result_path),
+            "--output-dir",
+            str(tmp_path / "out"),
+            "--kind",
+            "stress",
+            "--run-summary-layout",
+            "long",
+        ]
+    )
+
+    assert exit_code == EXIT_INVALID_INPUT
+    assert "--run-summary-layout" in capsys.readouterr().err

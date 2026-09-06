@@ -146,6 +146,11 @@ and stays out of scope (see Non-Goals).
 - `domain.results.OptimizationResult` and its section models (`AllocationRecord`, `BalanceRecord`,
   `DemandSummary`, `ConstraintActivity`, `ObjectiveAttributionRecord`, `EconomicsSummary`,
   `SolverDiagnostics`, `VerificationSection`, `DeskSummary`) — read-only sources for REQ-002.
+  Building `tables --input` (REQ-008) surfaced that `ConstraintActivity`/`VerificationSection`
+  could not round-trip through their own JSON (an unbounded `-inf`/`+inf` field serializes to
+  `null`, which then failed validation on read-back — nothing had read a result back before this
+  spec's CLI command did). Fixed alongside this spec (two `BeforeValidator` type aliases,
+  `plan.md`); emitted JSON is unchanged, only reading is repaired.
 - `domain.scenario_results.ScenarioComparison`, `StressTestReport`, `RouteAllocationDelta`,
   `InventoryBalanceDelta`, `StressScenarioOutcome` — read-only sources for REQ-003.
 - `exceptions.ConfigurationError` — reused for REQ-006's missing-extra error (no new exception

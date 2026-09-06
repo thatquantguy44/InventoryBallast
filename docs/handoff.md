@@ -44,7 +44,7 @@ per `specs/spec002/00_PLAN.md`'s own "Handoff Order":
 spec, copied in as a worked example of the SDD chain, not part of InventoryBallast's
 scope.
 
-## Current state (verified 2026-09-05)
+## Current state (verified 2026-09-06)
 
 Per `specs/spec002/00_PLAN.md`'s status line and `TRACEABILITY.md`:
 
@@ -60,28 +60,34 @@ Per `specs/spec002/00_PLAN.md`'s status line and `TRACEABILITY.md`:
   `domain/scenarios.py`, `domain/scenario_results.py`;
   `specs/0004-scenario-engine/`), T15's Phase 3 MIP business rules
   (`formulation/mip.py::compile_mip`, `components/constraints/mip_rules.py`,
-  `formulation/compiler_support.py`; `specs/0006-mip-business-rules/`), and T18's
+  `formulation/compiler_support.py`; `specs/0006-mip-business-rules/`), T18's
   Phase 4 QP allocation-stability penalty (`formulation/qp.py::compile_qp`,
   `components/objective_terms/allocation_stability.py`,
-  `formulation/qp_support.py`; `specs/0007-qp-allocation-stability/`). 193 tests
-  pass in the default `pytest tests/ -q` run (with the `highs` extra installed),
-  plus a real `pip install -e .` console script (`inventory-optimizer`, including
-  a working `scenarios` subcommand) and two `slow`-marked benchmark smoke tests
-  (Core-desk-scale LP from `specs/0005-test-hardening/`; moderate-scale QP from
+  `formulation/qp_support.py`; `specs/0007-qp-allocation-stability/`), and the
+  tabular result output layer (`reporting/tables.py`, `adapters/`;
+  `specs/0008-tabular-result-output/`). 220 tests pass (2 skipped for the
+  absent `pandas` extra) in the default `pytest tests/ -q` run (with the
+  `highs` extra installed), plus a real `pip install -e .` console script
+  (`inventory-optimizer`, including working `scenarios`/`tables` subcommands)
+  and two `slow`-marked benchmark smoke tests (Core-desk-scale LP from
+  `specs/0005-test-hardening/`; moderate-scale QP from
   `specs/0007-qp-allocation-stability/`) run separately.
 - **Test coverage hardened against `01_SPEC.md` §24 (2026-09-05):** an audit
   against the normative "Testing Strategy" section found `hypothesis` (a pinned
   dev dependency since T01) had never actually been used; `specs/0005-test-
   hardening/` closes that and four other real gaps — see its entry below.
-- **Not yet started:** Phase 5 (nonlinear/multi-period research; `01_SPEC.md`
-  §14.4, §13's multi-period extensions) — see "Next priorities" below.
+- **Approved, not yet implemented:** `specs/0009-discrete-fee-tier-pricing/`
+  (Phase 5 item 1, discrete form) — owner sign-off 2026-09-05; see "How to
+  actually start" below.
+- **Not yet started:** Phase 5 item 2 (multi-period settlement/scenario-tree
+  extensions; `01_SPEC.md` §13) — see "Next priorities" below.
 
 ## Environment
 
 ```bash
 python3 -m venv .venv
 .venv/bin/python -m pip install -e ".[dev,highs,dataframe,agentic]"
-.venv/bin/python -m pytest tests/ -q         # 193 passed, as of this writing (fast; excludes `slow`)
+.venv/bin/python -m pytest tests/ -q         # 220 passed, 2 skipped (pandas absent), as of this writing (fast; excludes `slow`)
 .venv/bin/python -m pytest tests/ -m slow -q # 2 benchmark smoke tests (Core desk LP + QP scale, ~1-2s)
 inventory-optimizer doctor                    # sanity-check the installed console script
 ```
@@ -374,35 +380,52 @@ is scarce, so that fixture needs ample supply or it passes for the wrong reason.
 After Phase 5: the Bloomberg-enriched realism workstream and the agency/prime
 desk workstream — see `00_PLAN.md` for exit gates on each.
 
-### Tabular result output (`01_SPEC.md` §7/§7.1) — drafted, not started
+### Tabular result output (`01_SPEC.md` §7/§7.1) — done (2026-09-06)
 
-`specs/0008-tabular-result-output/` (`spec.md`, `plan.md`, `tasks.md`) — a
-**Draft** spec, not approved and not implemented; available to pick up in
-parallel with Phase 5, since it touches no formulation or solver code.
+`specs/0008-tabular-result-output/` (`spec.md`, `plan.md`, `tasks.md`) — all
+twelve tasks (`T-001`-`T-012`) done. Closes two surfaces §7's own package tree
+names but this repo never built: `reporting/tables.py` ("reporting owns
+tables, attribution, serialization" per §7.1 — T11 built attribution and, via
+Pydantic, serialization; tables were skipped) and a new `adapters/` layer
+("JSON and optional dataframe conversion"). `reporting/tables.py` projects
+`OptimizationResult`/`ScenarioComparison`/`StressTestReport` into thirteen
+named, column-contracted tables (documented in `plan.md`'s "Table catalogue"
+and in `README.md`'s new "Tabular output" section) — pure, dependency-free,
+recomputing nothing. `adapters/csv_io.py` writes them with the standard
+library only; `adapters/dataframe.py` is the sole module in the package
+allowed to import `pandas`, lazily, raising `ConfigurationError` (naming the
+extra) when it is absent — mirroring how `solvers/highs.py` already owns the
+optional `highspy` import. A new `inventory-optimizer tables --input
+result.json --output-dir DIR [--kind result|scenarios|stress]
+[--run-summary-layout wide|long]` subcommand ties it together, composing with
+`optimize`/`scenarios` rather than changing either.
 
-It closes two surfaces §7's own package tree names but this repo never built:
-`reporting/tables.py` ("reporting owns tables, attribution, serialization" per
-§7.1 — T11 built attribution and, via Pydantic, serialization; tables were
-skipped) and the whole `adapters/` layer ("JSON and optional dataframe
-conversion", with `json_io.py`/`dataframe.py` named in the tree). Today the
-only machine-consumable output is nested `OptimizationResult` JSON, so any
-ordinary desk question ("which routes moved most?", "which rows bound?") needs
-a bespoke JSON-flattening script first.
+**A real defect surfaced while building this, fixed in the same pass**:
+`OptimizationResult` could not round-trip its own JSON —
+`ConstraintActivity.lower` (E1's `demand_cap` rows are one-sided, `-inf`)
+serializes to `null`, which a plain `float` field then rejected on read-back.
+Nothing had ever read a result back before `tables --input` did; `optimize
+--output result.json` had always written a file the package itself couldn't
+parse. Fixed with two `BeforeValidator` type aliases in `domain/results.py`
+mapping `null` back to `-inf`/`+inf` on `ConstraintActivity` and
+`VerificationSection`'s violation fields — emitted JSON is byte-identical,
+only reading is repaired, and a regression test pins it
+(`test_result_builder.py::test_result_round_trips_through_its_own_json`).
 
-Worth knowing before starting: `pyproject.toml` has declared a `dataframe`
-extra (`pandas>=2.2`) since Phase 0A with **zero usage anywhere in `src/`** —
-the same dormant-scaffold pattern `Formulation.QP`/`ScalingMetadata` showed
-before Phases 3-4 — and `pandas` is **not actually installed in the current
-`.venv`**, despite the Environment block above listing the extra in its
-install command. The draft therefore puts CSV output on the standard library
-(so the CLI path needs no extras at all) and confines `pandas` to a single
-lazily-importing module, mirroring how `solvers/highs.py` already owns the
-optional `highspy` import.
+`pyproject.toml`'s `dataframe` extra (`pandas>=2.2`, declared since Phase 0A
+with zero usage until now) has its first real consumer; `pandas` is still not
+installed in this `.venv`, so its own tests skip cleanly via
+`pytest.importorskip` while the CSV path (which needs no extra) is fully
+exercised. `specs/spec002/TRACEABILITY.md`'s `ARC-004` row gains partial
+evidence (`tests/unit/test_architecture_boundaries.py` proves the `adapters`
+layer's own boundary; the full pairwise layer matrix stays a follow-up). 29
+new tests; 220 passed + 2 skipped (pandas absent), zero regressions in the
+pre-existing 193.
 
-Explicitly *not* in that draft, and each recorded with reasoning: charts,
-dashboards, Excel workbooks (the QuantSmith dashboard surfaces were already
-evaluated and parked — see below), narrative prose summaries, any new derived
-metric, and a redundant `json_io.py` wrapper around what Pydantic already does.
+Explicitly *not* built, each recorded with reasoning: charts, dashboards,
+Excel workbooks (the QuantSmith dashboard surfaces were already evaluated and
+parked — see below), narrative prose summaries, any new derived metric, and a
+redundant `json_io.py` wrapper around what Pydantic already does.
 
 ### Possible spec idea: schedules/collateral (T29-T32) via DocumentRefinery — not scoped, not started
 
@@ -517,26 +540,28 @@ HiGHS/`CompiledProblem` stack — not a replacement for it. Verified concretely
 ### How to actually start
 
 **T11, T12, T13-T14, the §24 test-hardening pass, Phase 3 (MIP business
-rules), and Phase 4 (QP allocation-stability) are all done** (2026-09-04,
-2026-09-05 ×5) — see above. Repeat the same "write the spec first" pattern
-for Phase 5 (nonlinear/multi-period research) next: invoke
-`workflow_orchestrator`, let it route to `agents/optimization/
-problem_formulation/` (and `linear_programming/` for the reused baseline
-components) for turning §14.4's nonlinear-backend/sequential-convex-
-approximation requirements and §13's multi-period extensions into `REQ-*`/
-`AC-*` rows and `testing_validation` for the AC tests, and write a real
-`specs/0008-*` directory (`0007` is now taken by
-`specs/0007-qp-allocation-stability/`) tracked by the same `spec`/
-`spec-index` gates the specs before it used. `00_PLAN.md`'s own Phase 5
-guidance — "promote an extension only after benchmark, convergence, and
-fallback behavior are documented" — is stricter than any prior phase's exit
-gate; budget real design-review time before implementation starts.
+rules), Phase 4 (QP allocation-stability), and the tabular result output spec
+are all done** (2026-09-04, 2026-09-05 ×5, 2026-09-06) — see above.
 
-**Alternatively**, `specs/0008-tabular-result-output/` is already drafted and
-waiting for approval (see its entry above) — a smaller, self-contained piece
-that touches no formulation or solver code, so it can proceed in parallel with
-Phase 5 or ahead of it. Its spec chain exists; what it needs next is a review
-and an `Approver:` line, not more drafting.
+**Next up: `specs/0009-discrete-fee-tier-pricing/` is Approved (owner sign-off
+2026-09-05) but not yet implemented** — all three blocking design questions
+were resolved (RISK-003: price recommendations carry the same governance as
+allocation recommendations; the tier-selection row stays `<=` not `=`, so
+"don't lend at any offered price" is a legitimate outcome; the optimizer never
+invents candidate prices). This is the natural next task: the spec chain is
+already approved and traced, so it needs implementation against `plan.md`'s
+task list, not more design work.
+
+After that, Phase 5 item 2 (multi-period settlement and scenario-tree
+extensions) remains entirely unstarted and, unlike item 1, has no domain
+grounding at all — see the Phase 5 entry above. Repeat the "write the spec
+first" pattern there too when it's picked up: `workflow_orchestrator` routing
+to `agents/optimization/problem_formulation/`, a new `specs/0010-*` directory
+(`0009` is now taken), tracked by the same `spec`/`spec-index` gates.
+`00_PLAN.md`'s own Phase 5 guidance — "promote an extension only after
+benchmark, convergence, and fallback behavior are documented" — is stricter
+than any prior phase's exit gate; budget real design-review time before
+implementation starts.
 
 ## Open items for the next agent (not yet resolved)
 

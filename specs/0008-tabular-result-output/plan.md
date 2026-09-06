@@ -262,7 +262,7 @@ independent.
 | REQ-005 | `adapters/csv_io.py::write_table`, `write_tables` | T-004 |
 | REQ-006 | `adapters/dataframe.py::to_dataframe`, `to_dataframes` | T-005 |
 | REQ-007 | `adapters/dataframe.py` (sole pandas importer) | T-005, T-007 |
-| REQ-008 | `cli.py::_cmd_tables` + parser/dispatch entries | T-006 |
+| REQ-008 | `cli.py::_cmd_tables` + parser/dispatch entries; `domain/results.py`'s round-trip fix (`UnboundedBelow`/`UnboundedAbove`, T-012) | T-006, T-012 |
 | REQ-009 | `reporting/tables.py`'s sorted-mapping/fixed-column rules; `adapters/csv_io.py`'s line terminator | T-002, T-004, T-008 |
 | REQ-010 | `reporting/tables.py` (projection only) | T-002, T-003, T-008 |
 | REQ-011 | `tests/unit/test_architecture_boundaries.py` | T-007 |
@@ -314,11 +314,24 @@ objects come from the same factories `tests/unit/test_scenarios_runner.py` uses.
 
 ## Rollout, Observability & Rollback
 
-Purely additive: one new module in `reporting/`, one new `adapters/` package, one new CLI
-subcommand. No existing module's behavior changes, so rollback is deleting the new files and the
-`cli.py` parser/dispatch entries. Observability is the CLI's written-file listing plus the test
-suite. `specs/spec002/TRACEABILITY.md`'s `ARC-004` row gains partial evidence (the adapters-layer
-boundary test) and stays `SPECIFIED` pending the full layer matrix.
+Almost purely additive: one new module in `reporting/`, one new `adapters/` package, one new CLI
+subcommand, plus one small, backward-compatible fix to `domain/results.py` (T-012, discovered
+during implementation — see below). No existing module's *behavior* changes and no emitted byte
+changes anywhere, so rollback is deleting the new files, the `cli.py` parser/dispatch entries, and
+reverting the two `BeforeValidator` type aliases. Observability is the CLI's written-file listing
+plus the test suite. `specs/spec002/TRACEABILITY.md`'s `ARC-004` row gains partial evidence (the
+adapters-layer boundary test) and stays `SPECIFIED` pending the full layer matrix.
+
+**Deviation from approved scope, recorded per the constitution's "no silent trade-offs":**
+implementing REQ-008 (the `tables` CLI reading a saved result JSON) surfaced that
+`OptimizationResult` could not round-trip its own JSON at all — `ConstraintActivity.lower` (E1's
+`demand_cap` rows are one-sided, `-inf`) serializes to `null`, which a plain `float` field then
+rejects on read-back. This was a pre-existing, latent defect in T11's `domain/results.py`, invisible
+until this spec's command became the first thing to ever read a result back. Fixed with two
+`Annotated[float, BeforeValidator(...)]` type aliases mapping `null` back to `-inf`/`+inf` on
+`ConstraintActivity` and `VerificationSection`'s violation fields — emitted JSON is byte-identical;
+only reading is repaired. `tests/unit/reporting/test_result_builder.py::
+test_result_round_trips_through_its_own_json` pins it.
 
 ## Open Questions
 

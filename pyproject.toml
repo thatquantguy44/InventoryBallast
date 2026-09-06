@@ -74,6 +74,13 @@ module = ["scipy", "scipy.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
+# pandas is the optional `dataframe` extra (specs/0008-tabular-result-output/); pandas-stubs is not
+# a hard dev dependency since the extra itself is optional -- adapters/dataframe.py's own lazy
+# import already keeps it optional at runtime, this keeps it optional for type-checking too.
+module = ["pandas", "pandas.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
 # highspy ships a stub with gaps: some constructors read as untyped without follow_imports="skip",
 # and one enum member (HighsModelStatus.kHighsInterrupt, real at runtime) is missing from it even
 # with skip -- silenced at its one use site in solvers/highs.py instead of here.
