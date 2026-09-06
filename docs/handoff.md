@@ -312,16 +312,64 @@ this QP term (PWL/NLP and QP's other three candidate terms stay `SPECIFIED`).
 `tests/unit/test_qp_compiler.py`, `tests/unit/test_qp_support.py`,
 `tests/benchmark/test_qp_scale.py`); zero regressions in the pre-existing 172.
 
-### Phase 5 — Nonlinear and multi-period research (`01_SPEC.md` §14.4, §13; `00_PLAN.md`) — next up
+### Phase 5 — Nonlinear and multi-period research (`01_SPEC.md` §14.4, §13; `00_PLAN.md`) — item 1 drafted, item 2 not started
 
-Not started. Joint fee/quantity demand curves through an optional nonlinear
-backend or sequential convex approximation; multi-period settlement and
-scenario-tree extensions. `00_PLAN.md`'s own guidance: "promote an extension
-only after benchmark, convergence, and fallback behavior are documented." This
-is also what the `quantsmith.pipelines.optimization_solvers.solve_milp`
-reference solver (see "The `quantsmith` package" below) could become useful
-for as an independent toy-scale cross-check during design review, for any
-MIQP-relaxation approach to a discrete piece of this phase.
+Two unrelated pieces. **Item 1 (joint fee/quantity pricing) is now drafted** as
+`specs/0009-discrete-fee-tier-pricing/` — see below. **Item 2 (multi-period
+settlement and scenario-tree extensions) has not started** and has no domain
+grounding at all: `FormulationConfig.planning_horizon_days` exists but is only
+a day-count scalar feeding `fee_revenue`, not a time-indexed decision
+sequence, so real multi-period work means new domain modeling from scratch.
+
+`00_PLAN.md`'s own guidance for this phase — "promote an extension only after
+benchmark, convergence, and fallback behavior are documented" — is stricter
+than any earlier phase's exit gate, and is why item 1's draft deliberately
+takes the discrete route (below) rather than a nonlinear backend.
+
+**QuantSmith is of essentially no help here** (checked 2026-09-05, same pinned
+commit): it has no NLP solver, no sequential-convex-approximation machinery,
+and no scenario-tree/stochastic support. Its `solve_dp` is a deterministic
+backward-induction DP whose own docstring requires "an enumerable, hashable
+state space" — built for a single discretized scalar position
+(`multi_period_rebalancing.py`), not thousands of continuous route quantities
+across periods. `mean_variance.MeanVarianceOptimizer` is closed-form Markowitz
+with no box bounds. Both are toy-scale conceptual references at best, matching
+the earlier `solve_lp`/`solve_milp` verdict.
+
+### Phase 5 item 1 — discrete fee-tier pricing (`01_SPEC.md` §12.4) — drafted, not started
+
+`specs/0009-discrete-fee-tier-pricing/` (`spec.md`, `plan.md`, `tasks.md`) — a
+**Draft** spec, not approved and not implemented.
+
+The key finding that shaped it: **§12.4 already specifies this formulation
+normatively** ("Discrete price-selection MIP": binary `z_gk` per candidate fee
+tier, `sum_k z_gk <= 1`, `0 <= q_gk <= D_gk * z_gk`, objective `f_gk * q_gk`)
+and it was simply never built. §12.5 explicitly sanctions this as the
+alternative to a nonlinear formulation: continuous fee creates a bilinear
+`f_g * q_g` term that "belongs in an optional nonlinear formulation or a
+documented sequential/piecewise approximation."
+
+Because each candidate fee is a *constant*, the compiled model stays a **linear
+MIP** — so HiGHS either proves global optimality or reports `FEASIBLE_LIMIT`,
+the same honest contract Phase 3 established. A true NLP would only ever return
+a local optimum, which §14.4 itself requires be labeled as such. That, plus
+§14.3's stated preference ("prefer piecewise-linear approximations"), is why
+the draft goes discrete first; a `NonlinearSolverBackend` remains open later
+and is listed in the spec's own follow-ups.
+
+Shipping it would also close two things deferred elsewhere: Phase 3's item 2
+(discrete rate-ladder selection, a declared Non-Goal in
+`specs/0006-mip-business-rules/` for want of a fee-tier concept) and §14.1's
+seventh MIP trigger ("one fee tier per demand group"). Even
+`validation/reconciliation.py`'s existing error message already points users at
+"the discrete pricing MIP" — a facility that does not yet exist.
+
+Worth knowing before implementing: the draft deviates from §12.4's sketch by
+using per-route-per-tier quantities rather than one group-level `q_gk`, because
+§12.2 notes routes in a group can carry different `revenue_share` — a
+group-level revenue coefficient would be wrong for them. And `plan.md`'s worked
+fixture table flags a trap: the "repricing down wins" test inverts if inventory
+is scarce, so that fixture needs ample supply or it passes for the wrong reason.
 
 After Phase 5: the Bloomberg-enriched realism workstream and the agency/prime
 desk workstream — see `00_PLAN.md` for exit gates on each.
