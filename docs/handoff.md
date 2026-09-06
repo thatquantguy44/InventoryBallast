@@ -326,6 +326,86 @@ MIQP-relaxation approach to a discrete piece of this phase.
 After Phase 5: the Bloomberg-enriched realism workstream and the agency/prime
 desk workstream — see `00_PLAN.md` for exit gates on each.
 
+### Tabular result output (`01_SPEC.md` §7/§7.1) — drafted, not started
+
+`specs/0008-tabular-result-output/` (`spec.md`, `plan.md`, `tasks.md`) — a
+**Draft** spec, not approved and not implemented; available to pick up in
+parallel with Phase 5, since it touches no formulation or solver code.
+
+It closes two surfaces §7's own package tree names but this repo never built:
+`reporting/tables.py` ("reporting owns tables, attribution, serialization" per
+§7.1 — T11 built attribution and, via Pydantic, serialization; tables were
+skipped) and the whole `adapters/` layer ("JSON and optional dataframe
+conversion", with `json_io.py`/`dataframe.py` named in the tree). Today the
+only machine-consumable output is nested `OptimizationResult` JSON, so any
+ordinary desk question ("which routes moved most?", "which rows bound?") needs
+a bespoke JSON-flattening script first.
+
+Worth knowing before starting: `pyproject.toml` has declared a `dataframe`
+extra (`pandas>=2.2`) since Phase 0A with **zero usage anywhere in `src/`** —
+the same dormant-scaffold pattern `Formulation.QP`/`ScalingMetadata` showed
+before Phases 3-4 — and `pandas` is **not actually installed in the current
+`.venv`**, despite the Environment block above listing the extra in its
+install command. The draft therefore puts CSV output on the standard library
+(so the CLI path needs no extras at all) and confines `pandas` to a single
+lazily-importing module, mirroring how `solvers/highs.py` already owns the
+optional `highspy` import.
+
+Explicitly *not* in that draft, and each recorded with reasoning: charts,
+dashboards, Excel workbooks (the QuantSmith dashboard surfaces were already
+evaluated and parked — see below), narrative prose summaries, any new derived
+metric, and a redundant `json_io.py` wrapper around what Pydantic already does.
+
+### Possible spec idea: schedules/collateral (T29-T32) via DocumentRefinery — not scoped, not started
+
+`SCH-001`–`SCH-004` (T29, schedule resolution) and `COL-001`–`COL-004`
+(T30-T32, collateral) are entirely `SPECIFIED`, zero code — see the phase
+audit above. Both need a real source of eligibility/collateral schedule data
+(§9.6: `EligibilityRule`, `CollateralSchedule`), and this repo has no adapter
+or ingestion path for that today; a schedule/collateral spec would otherwise
+have to invent one from scratch alongside the optimizer-side compiler work.
+
+A sibling, same-owner repository —
+**[DocumentRefinery](../../../agentic_systems/DocumentRefinery/)** (a local
+sibling-directory path specific to this machine's current layout, not a
+portable URL — see `document_refinery_handoff.md` there for its own full
+context) — already exists to solve exactly the upstream half of this problem:
+it ingests collateral/CSA/repo/fee-schedule
+documents and lands clause-level-lineage, bitemporal gold tables. Its Tier-1
+document scope names, verbatim, "Collateral eligibility schedules (tri-party
+and bilateral), concentration limits" and "CSAs and credit support annex
+amendments (eligibility, haircuts, thresholds, MTA, currencies)" —
+`01_SPEC.md` §9.6's `CollateralSchedule` fields (haircut buckets, margin
+factor, concentration limits, currency scope, minimum transfer amount) map
+closely onto its `gold_eligibility_terms` columns (`haircut_pct`,
+`concentration_limit_pct`, `concentration_basis`, `currency_scope`,
+`rating_floor`, `tenor_cap_days`, `asset_criterion`, `eligible`).
+
+**This is an idea, not a plan — real gaps before it's buildable:**
+
+- DocumentRefinery's own Phase 1 (the one working vertical slice, "collateral
+  eligibility schedules") is **owner-acceptance-pending**, not production:
+  ≥95% field accuracy and ≤15-minute review time are unmeasured per its own
+  handoff. CSA terms and lending-fee schedules — the pieces closest to
+  `01_SPEC.md`'s fee/term schedule needs — are its own **Phase 4, "not
+  started."** GMRA/MRA/MSLA (repo & securities-lending terms) are Tier-1
+  *scope*, not yet a built pipeline either.
+- Its `eligible BOOLEAN` + haircut/concentration columns are not a drop-in
+  match for §9.6's five-way `ALLOW`/`DENY`/`GRANDFATHER`/`RECALL_ONLY`/
+  `REVIEW` action — a translation layer would be needed, not a type cast.
+- Architecturally this must land as an **adapter, not a core dependency** —
+  the same boundary `ARC-002` already draws around QR Haven/vendor clients
+  (`inventory_optimizer`'s core must not import a document-ingestion
+  package); a real spec would define a small ingestion adapter (in either
+  repo) translating DocumentRefinery's gold tables into `EligibilitySchedule`/
+  `CollateralSchedule` domain objects, not a direct import.
+- Being same-owner is a real advantage (no external-vendor trust/versioning
+  question, unlike QuantSmith) but doesn't change the maturity gap above.
+
+Worth a real look once T29/T30-T32 are actually being scoped — and worth
+checking DocumentRefinery's own progress at that time, since both repos are
+independently active. Not something to start now.
+
 ## Using QuantSmith to build the rest of this repo
 
 Two layers were adopted (see "What this repo is"); both have concrete uses here,
@@ -403,6 +483,12 @@ approximation requirements and §13's multi-period extensions into `REQ-*`/
 guidance — "promote an extension only after benchmark, convergence, and
 fallback behavior are documented" — is stricter than any prior phase's exit
 gate; budget real design-review time before implementation starts.
+
+**Alternatively**, `specs/0008-tabular-result-output/` is already drafted and
+waiting for approval (see its entry above) — a smaller, self-contained piece
+that touches no formulation or solver code, so it can proceed in parallel with
+Phase 5 or ahead of it. Its spec chain exists; what it needs next is a review
+and an `Approver:` line, not more drafting.
 
 ## Open items for the next agent (not yet resolved)
 
