@@ -1,23 +1,20 @@
 # Tasks: Discrete fee-tier pricing (joint fee/quantity, Phase 5 item 1)
 
 - **Spec:** 0009-discrete-fee-tier-pricing (`spec.md`, `plan.md`)
-- **Last updated:** 2026-09-05
+- **Last updated:** 2026-09-07
 
 > Ordered, testable units of work. Every task cites the requirement(s) it advances
 > and carries a Definition of Done. No task without a requirement.
 
-**Status note:** approved 2026-09-05, sequenced after `0008`. **Implementation started
-2026-09-06** on branch `0009-discrete-fee-tier-pricing`: T-001 through T-006 (the domain field,
-`BuildContext` plumbing, both new components, MIP-compiler wiring, and result reporting) are
-`done` and manually smoke-tested end to end through `InventoryOptimizer.optimize()` against
-`plan.md`'s worked `epsilon=0.5` fixture (reproduces the documented `D=70.71, rev=0.1414, tier
-0.072 wins` values exactly, `verification.passed=True`, attribution reconciles with zero
-mismatch). The full pre-existing suite (220 passed, 2 skipped) still passes unchanged after these
-six tasks -- a first, informal NFR-001 signal, but **not yet a substitute for T-008's own tests**.
-T-007 (scale test), T-008 (the golden/unit test files this spec's ACs actually cite), T-009
-(`TRACEABILITY.md`), and T-010 (`docs/handoff.md`/`specs/README.md`) are still `todo` -- resume
-there. No acceptance criterion is considered met until its named test in the Test Coverage Map
-below exists and passes.
+**Status note:** approved 2026-09-05, sequenced after `0008`. Implementation started 2026-09-06
+on branch `0009-discrete-fee-tier-pricing`. **T-001 through T-008 are `done` (2026-09-07):** the
+domain field, `BuildContext` plumbing, both new components, MIP-compiler wiring, result reporting,
+the `slow`-marked scale test, and the full golden/unit test suite this spec's ACs cite. Every
+acceptance criterion in the Test Coverage Map below now has a named, passing test. Full suite:
+239 passed, 2 skipped (pandas absent), zero regressions in the pre-existing 220; `pytest tests/ -m
+slow -q` gives 3 passed (the two pre-existing benchmarks plus this spec's own). **T-009**
+(`TRACEABILITY.md`) **and T-010** (`docs/handoff.md`/`specs/README.md`) **are still `todo` --
+resume there.**
 
 ## Definition of Done (applies to every task)
 
@@ -42,8 +39,8 @@ below exists and passes.
 | T-004 | Add `components/objective_terms/tier_pricing.py::TierPricingTerm` contributing `P*tau*s_j*(f_gk - f_j^ref)` per `w_jk`, with `attribute()` recomputing the same and reporting a zero baseline. | REQ-005 | done | Delta construction leaves `fee_revenue` untouched; implemented as `fee_revenue_coefficient(route_at_tier) - fee_revenue_coefficient(route)` via `route.model_copy(update={"fee_rate": ...})`, so the variable-cost cancellation is guaranteed by reuse rather than re-derived. |
 | T-005 | Extend `formulation/compiler_support.py` (`needs_mip`, `mip_required_issues`) and `formulation/mip.py`'s component tuples. | REQ-006 | done | One clause each; `compile_lp`'s rejection and the facade's dispatch then work with no further edits. `mip.py` also gained the `"t"` block's integrality marking (binary), alongside `z`/`n`. |
 | T-006 | Add `domain/results.py::PricingSelection` and the defaulted `OptimizationResult.pricing` section; populate it in `reporting/result_builder.py`. | REQ-007 | done | Additive and defaulted, so existing results/tests are unaffected. `reference_fee_rate` mirrors `_compute_demand_caps`'s own incumbent-fee fallback (group's shared route fee, else the forecast's own reference). |
-| T-007 | Add a `slow`-marked scale test sizing the `J*K` variable growth. | REQ-003 | todo | RISK-001; follows `specs/0005-test-hardening/`'s benchmark precedent. |
-| T-008 | Tests: `tests/golden/test_fee_tier_pricing.py`, `tests/unit/test_fee_tier_compiler.py`, and `tests/unit/test_domain_contracts.py` additions. Confirm all pre-existing tests still pass (AC-009). | REQ-001 through REQ-010, NFR-001 through NFR-004 | todo | See Test Coverage Map, and `plan.md`'s worked fixture table — note the supply-sufficiency trap on the AC-002 fixture. **Resume here** — this is the next task. |
+| T-007 | Add a `slow`-marked scale test sizing the `J*K` variable growth. | REQ-003 | done | `tests/benchmark/test_fee_tier_scale.py`: 20 tiered groups × 10 routes × 10 tiers (2,000 `w` + 200 `t` variables); compiles, solves, and verifies in well under the 60s generous ceiling. |
+| T-008 | Tests: `tests/golden/test_fee_tier_pricing.py`, `tests/unit/test_fee_tier_compiler.py`, and `tests/unit/test_domain_contracts.py` additions. Confirm all pre-existing tests still pass (AC-009). | REQ-001 through REQ-010, NFR-001 through NFR-004 | done | 19 new tests (239 total, zero regressions in the pre-existing 220). See the updated Test Coverage Map below for exact names — several ACs ended up split across more than one test than originally sketched (e.g. AC-007's three independent validator cases, AC-008's parametrized route/group-id case) for clarity, not scope creep. |
 | T-009 | Update `specs/spec002/TRACEABILITY.md`: `LP-004` gains discrete-pricing evidence; `LP-009` gains the §12.4 / §14.1-seventh-trigger portion, with continuous nonlinear pricing and PWL interpolation explicitly still `SPECIFIED`. | REQ-001 through REQ-010 | todo | Mirrors the partial-status honesty already used for `LP-008`/`PLT-002`/`VER-005`. Do this only after T-008's tests actually pass — evidence pointers must cite real, passing tests. |
 | T-010 | Update `docs/handoff.md` and `specs/README.md`: record this spec, note that Phase 3's deferred rate-ladder item and §14.1's seventh MIP trigger are closed by it, and restate what Phase 5 still leaves open (continuous NLP, multi-period). | REQ-001 through REQ-010 | todo | Phase 5 is *not* complete when this ships — only its item 1, in discrete form. Last task; do after T-007/T-008/T-009. |
 
@@ -53,16 +50,17 @@ Status values: `todo` | `in-progress` | `blocked` | `done`.
 
 | Acceptance criterion | Test(s) | Status |
 | --- | --- | --- |
-| AC-001 | `test_fee_tier_pricing.py::test_reprices_up_when_demand_is_inelastic` | todo |
-| AC-002 | `test_fee_tier_pricing.py::test_reprices_down_for_volume_when_elastic` | todo |
-| AC-003 | `test_fee_tier_pricing.py::test_incumbent_tier_wins_when_supply_is_scarce` | todo |
-| AC-004 | `test_fee_tier_compiler.py::test_compile_lp_rejects_tiered_request` | todo |
-| AC-005 | `test_fee_tier_pricing.py::test_result_reports_menu_and_selection` | todo |
-| AC-006 | `test_fee_tier_pricing.py::test_attribution_reconciles_and_matches_hand_delta` | todo |
-| AC-007 | `test_domain_contracts.py::test_candidate_fee_rates_must_be_positive_increasing_unique` | todo |
-| AC-008 | `test_fee_tier_compiler.py::test_reserved_separator_in_id_is_rejected` | todo |
-| AC-009 | `test_fee_tier_compiler.py::test_untiered_request_index_is_unchanged`; existing suite (193) still passing | todo |
-| AC-010 | `test_fee_tier_pricing.py::test_route_revenue_shares_honored_at_selected_tier` | todo |
+| AC-001 | `test_fee_tier_pricing.py::test_reprices_up_when_demand_is_inelastic` | done |
+| AC-002 | `test_fee_tier_pricing.py::test_reprices_down_for_volume_when_elastic` | done |
+| AC-003 | `test_fee_tier_pricing.py::test_incumbent_tier_wins_when_supply_is_scarce` | done |
+| AC-004 | `test_fee_tier_compiler.py::test_compile_lp_rejects_tiered_request` | done |
+| AC-005 | `test_fee_tier_pricing.py::test_result_reports_menu_and_selection` | done |
+| AC-006 | `test_fee_tier_pricing.py::test_attribution_reconciles_and_matches_hand_delta` | done |
+| AC-007 | `test_domain_contracts.py::test_demand_forecast_rejects_non_positive_candidate_fee_rate`, `::test_demand_forecast_rejects_duplicate_candidate_fee_rates`, `::test_demand_forecast_rejects_unordered_candidate_fee_rates`, `::test_demand_forecast_rejects_more_than_max_candidate_fee_tiers`, `::test_demand_forecast_accepts_empty_candidate_fee_rates_by_default` | done |
+| AC-008 | `test_fee_tier_compiler.py::test_reserved_separator_is_rejected[demand_group_id/route_id]` (parametrized) | done |
+| AC-009 | `test_fee_tier_compiler.py::test_untiered_request_index_is_unchanged`; full suite (239 total, zero regressions in the pre-existing 220) | done |
+| AC-010 | `test_fee_tier_pricing.py::test_route_revenue_shares_honored_at_selected_tier` | done |
+| REQ-009 (at most one tier) | `test_fee_tier_pricing.py::test_at_most_one_tier_is_ever_selected` | done |
 
 ## Follow-ups
 

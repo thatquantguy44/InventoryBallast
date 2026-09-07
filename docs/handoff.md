@@ -44,7 +44,7 @@ per `specs/spec002/00_PLAN.md`'s own "Handoff Order":
 spec, copied in as a worked example of the SDD chain, not part of InventoryBallast's
 scope.
 
-## Current state (verified 2026-09-06)
+## Current state (verified 2026-09-07)
 
 Per `specs/spec002/00_PLAN.md`'s status line and `TRACEABILITY.md`:
 
@@ -65,22 +65,21 @@ Per `specs/spec002/00_PLAN.md`'s status line and `TRACEABILITY.md`:
   `components/objective_terms/allocation_stability.py`,
   `formulation/qp_support.py`; `specs/0007-qp-allocation-stability/`), and the
   tabular result output layer (`reporting/tables.py`, `adapters/`;
-  `specs/0008-tabular-result-output/`). 220 tests pass (2 skipped for the
-  absent `pandas` extra) in the default `pytest tests/ -q` run (with the
-  `highs` extra installed), plus a real `pip install -e .` console script
-  (`inventory-optimizer`, including working `scenarios`/`tables` subcommands)
-  and two `slow`-marked benchmark smoke tests (Core-desk-scale LP from
-  `specs/0005-test-hardening/`; moderate-scale QP from
-  `specs/0007-qp-allocation-stability/`) run separately.
+  `specs/0008-tabular-result-output/`), and Section 12.4's discrete fee-tier
+  pricing MIP (`components/constraints/fee_tiers.py`,
+  `components/objective_terms/tier_pricing.py`, `domain/results.py::
+  PricingSelection`; `specs/0009-discrete-fee-tier-pricing/`). 239 tests pass
+  (2 skipped for the absent `pandas` extra) in the default `pytest tests/ -q`
+  run (with the `highs` extra installed), plus a real `pip install -e .`
+  console script (`inventory-optimizer`, including working
+  `scenarios`/`tables` subcommands) and three `slow`-marked benchmark smoke
+  tests (Core-desk-scale LP from `specs/0005-test-hardening/`; moderate-scale
+  QP from `specs/0007-qp-allocation-stability/`; moderate-scale fee-tier MIP
+  from `specs/0009-discrete-fee-tier-pricing/`) run separately.
 - **Test coverage hardened against `01_SPEC.md` §24 (2026-09-05):** an audit
   against the normative "Testing Strategy" section found `hypothesis` (a pinned
   dev dependency since T01) had never actually been used; `specs/0005-test-
   hardening/` closes that and four other real gaps — see its entry below.
-- **Approved, implementation in progress (started 2026-09-06):**
-  `specs/0009-discrete-fee-tier-pricing/` (Phase 5 item 1, discrete form) —
-  owner sign-off 2026-09-05; see "How to actually start" below and this
-  spec's own `tasks.md` (which tracks per-task status precisely) for exactly
-  where to resume.
 - **Not yet started:** Phase 5 item 2 (multi-period settlement/scenario-tree
   extensions; `01_SPEC.md` §13) — see "Next priorities" below.
 
@@ -320,9 +319,9 @@ this QP term (PWL/NLP and QP's other three candidate terms stay `SPECIFIED`).
 `tests/unit/test_qp_compiler.py`, `tests/unit/test_qp_support.py`,
 `tests/benchmark/test_qp_scale.py`); zero regressions in the pre-existing 172.
 
-### Phase 5 — Nonlinear and multi-period research (`01_SPEC.md` §14.4, §13; `00_PLAN.md`) — item 1 drafted, item 2 not started
+### Phase 5 — Nonlinear and multi-period research (`01_SPEC.md` §14.4, §13; `00_PLAN.md`) — item 1 done (discrete form), item 2 not started
 
-Two unrelated pieces. **Item 1 (joint fee/quantity pricing) is now drafted** as
+Two unrelated pieces. **Item 1 (joint fee/quantity pricing) is done, in its discrete form** —
 `specs/0009-discrete-fee-tier-pricing/` — see below. **Item 2 (multi-period
 settlement and scenario-tree extensions) has not started** and has no domain
 grounding at all: `FormulationConfig.planning_horizon_days` exists but is only
@@ -331,8 +330,8 @@ sequence, so real multi-period work means new domain modeling from scratch.
 
 `00_PLAN.md`'s own guidance for this phase — "promote an extension only after
 benchmark, convergence, and fallback behavior are documented" — is stricter
-than any earlier phase's exit gate, and is why item 1's draft deliberately
-takes the discrete route (below) rather than a nonlinear backend.
+than any earlier phase's exit gate, and is why item 1 deliberately shipped the
+discrete route (below) rather than a nonlinear backend.
 
 **QuantSmith is of essentially no help here** (checked 2026-09-05, same pinned
 commit): it has no NLP solver, no sequential-convex-approximation machinery,
@@ -344,17 +343,16 @@ across periods. `mean_variance.MeanVarianceOptimizer` is closed-form Markowitz
 with no box bounds. Both are toy-scale conceptual references at best, matching
 the earlier `solve_lp`/`solve_milp` verdict.
 
-### Phase 5 item 1 — discrete fee-tier pricing (`01_SPEC.md` §12.4) — approved, implementation in progress
+### Phase 5 item 1 — discrete fee-tier pricing (`01_SPEC.md` §12.4) — done (2026-09-07)
 
-`specs/0009-discrete-fee-tier-pricing/` (`spec.md`, `plan.md`, `tasks.md`) — **Approved**
-(owner sign-off 2026-09-05, all three blocking design questions resolved). Implementation
-started 2026-09-06 on branch `0009-discrete-fee-tier-pricing`; see "How to actually start"
-below and this spec's own `tasks.md` for the exact per-task state.
+`specs/0009-discrete-fee-tier-pricing/` (`spec.md`, `plan.md`, `tasks.md`) — all ten tasks
+(`T-001`-`T-010`) done, on branch `0009-discrete-fee-tier-pricing` (owner sign-off 2026-09-05, all
+three blocking design questions resolved; implementation 2026-09-06/07).
 
 The key finding that shaped it: **§12.4 already specifies this formulation
 normatively** ("Discrete price-selection MIP": binary `z_gk` per candidate fee
 tier, `sum_k z_gk <= 1`, `0 <= q_gk <= D_gk * z_gk`, objective `f_gk * q_gk`)
-and it was simply never built. §12.5 explicitly sanctions this as the
+and it had simply never been built. §12.5 explicitly sanctions this as the
 alternative to a nonlinear formulation: continuous fee creates a bilinear
 `f_g * q_g` term that "belongs in an optional nonlinear formulation or a
 documented sequential/piecewise approximation."
@@ -364,22 +362,44 @@ MIP** — so HiGHS either proves global optimality or reports `FEASIBLE_LIMIT`,
 the same honest contract Phase 3 established. A true NLP would only ever return
 a local optimum, which §14.4 itself requires be labeled as such. That, plus
 §14.3's stated preference ("prefer piecewise-linear approximations"), is why
-the draft goes discrete first; a `NonlinearSolverBackend` remains open later
-and is listed in the spec's own follow-ups.
+this shipped the discrete route first; a `NonlinearSolverBackend` remains open
+later and is listed in the spec's own follow-ups.
 
-Shipping it would also close two things deferred elsewhere: Phase 3's item 2
-(discrete rate-ladder selection, a declared Non-Goal in
-`specs/0006-mip-business-rules/` for want of a fee-tier concept) and §14.1's
-seventh MIP trigger ("one fee tier per demand group"). Even
-`validation/reconciliation.py`'s existing error message already points users at
-"the discrete pricing MIP" — a facility that does not yet exist.
+**What shipped:** an optional `DemandForecast.candidate_fee_rates` menu (empty by default, absent
+for every existing request); `formulation/context.py` precomputes one `EvaluatedDemand` per
+candidate fee (the existing, unchanged `elasticity.evaluate_demand_cap`, called once per tier
+instead of once per group) and appends two new empty-when-unused variable blocks (`"t"` — one
+binary tier-selection variable per candidate fee; `"w"` — one continuous per-route-per-tier
+quantity variable); a new `components/constraints/fee_tiers.py::FeeTierConstraint` compiles §12.4's
+three row families (`tier_select`, `tier_capacity`, `tier_split`); a new
+`components/objective_terms/tier_pricing.py::TierPricingTerm` values the selected tier's fee as a
+*delta* from the incumbent `route.fee_rate`, leaving the existing `fee_revenue` term untouched;
+`formulation.compiler_support.needs_mip` gained one clause so a tiered request auto-routes to
+`compile_mip` (and `compile_lp` fails closed) via the existing mechanisms, no new ones; and
+`domain/results.py::PricingSelection` (a new, additive, defaulted `OptimizationResult.pricing`
+section) discloses, per tiered demand group, the candidate menu offered, the fee selected, and the
+quantity filled at it (§14.3's disclosure duty).
 
-Worth knowing before implementing: the draft deviates from §12.4's sketch by
-using per-route-per-tier quantities rather than one group-level `q_gk`, because
-§12.2 notes routes in a group can carry different `revenue_share` — a
-group-level revenue coefficient would be wrong for them. And `plan.md`'s worked
-fixture table flags a trap: the "repricing down wins" test inverts if inventory
-is scarce, so that fixture needs ample supply or it passes for the wrong reason.
+This also closed two things deferred elsewhere: Phase 3's item 2 (discrete rate-ladder selection, a
+declared Non-Goal in `specs/0006-mip-business-rules/` for want of a fee-tier concept) and §14.1's
+seventh MIP trigger ("one fee tier per demand group"). `validation/reconciliation.py`'s existing
+error message ("use distinct demand groups or the discrete pricing MIP") now points at a facility
+that actually exists.
+
+Two deviations recorded, not silent: (1) per-route-per-tier quantities (`w_jk`) rather than one
+group-level `q_gk` as §12.4 sketches, because §12.2 notes routes in a group can carry different
+`revenue_share` — a group-level revenue coefficient would be wrong for them (AC-010's own test
+pins this: two routes with different `revenue_share` in one tiered group are valued independently,
+not at one blended rate). (2) the existing `demand_cap` component skips any demand group carrying
+tiers (its row would otherwise cap quantity at the *incumbent* fee's demand, which is wrong the
+moment a cheaper tier is selected) — a single guarded line, inert for every untiered request.
+
+29 new tests (`tests/golden/test_fee_tier_pricing.py`, `tests/unit/test_fee_tier_compiler.py`,
+`tests/unit/test_domain_contracts.py` additions, `tests/benchmark/test_fee_tier_scale.py`
+`slow`-marked); 239 passed + 2 skipped (pandas absent), zero regressions in the pre-existing 220.
+`specs/spec002/TRACEABILITY.md`'s `LP-004` row gains discrete-per-candidate-fee evidence; `LP-009`
+extends its `IMPLEMENTED` status to cover Section 12.4's discrete price-selection MIP (PWL/NLP —
+Section 14.3-14.4's continuous-fee case — and QP's other three candidate terms stay `SPECIFIED`).
 
 After Phase 5: the Bloomberg-enriched realism workstream and the agency/prime
 desk workstream — see `00_PLAN.md` for exit gates on each.
@@ -544,43 +564,19 @@ HiGHS/`CompiledProblem` stack — not a replacement for it. Verified concretely
 ### How to actually start
 
 **T11, T12, T13-T14, the §24 test-hardening pass, Phase 3 (MIP business
-rules), Phase 4 (QP allocation-stability), and the tabular result output spec
-are all done** (2026-09-04, 2026-09-05 ×5, 2026-09-06) — see above.
+rules), Phase 4 (QP allocation-stability), the tabular result output spec, and
+Phase 5 item 1 (discrete fee-tier pricing) are all done**
+(2026-09-04, 2026-09-05 ×5, 2026-09-06, 2026-09-07) — see above. Branch
+`0009-discrete-fee-tier-pricing` carries the last of these and has not yet
+been merged to `main` or pushed anywhere (this repo has no GitHub remote
+configured at all yet — see "Open items" below); merge/rebase it onto `main`
+under whatever process the owner uses before starting new work from `main`.
 
-**In progress: `specs/0009-discrete-fee-tier-pricing/` is Approved (owner sign-off
-2026-09-05) and implementation started 2026-09-06** on branch
-`0009-discrete-fee-tier-pricing` — all three blocking design questions
-were resolved (RISK-003: price recommendations carry the same governance as
-allocation recommendations; the tier-selection row stays `<=` not `=`, so
-"don't lend at any offered price" is a legitimate outcome; the optimizer never
-invents candidate prices).
-
-**Resume here.** `tasks.md` T-001 through T-006 are `done`: the
-`DemandForecast.candidate_fee_rates` field, `formulation/context.py`'s
-`tiered_demand_group_ids`/`tier_caps`/`"t"`/`"w"` variable blocks and shared
-`tier_scope_id`/`route_tier_scope_id` key encoding, the new
-`components/constraints/fee_tiers.py::FeeTierConstraint` and
-`components/objective_terms/tier_pricing.py::TierPricingTerm`, the
-`needs_mip`/`mip_required_issues`/`formulation/mip.py` wiring, and
-`domain/results.py::PricingSelection` plus its `reporting/result_builder.py`
-population. Manually smoke-tested end to end through
-`InventoryOptimizer.optimize()` against `plan.md`'s worked `epsilon=0.5`
-fixture (reproduces `D=70.71, rev=0.1414`, tier `0.072` selected, exactly);
-the full pre-existing suite (220 passed, 2 skipped) still passes unchanged.
-**Not done yet:** T-007 (the `slow`-marked `J*K` scale test), T-008 (the real
-`tests/golden/test_fee_tier_pricing.py` / `tests/unit/test_fee_tier_compiler.py`
-/ `tests/unit/test_domain_contracts.py` additions this spec's ACs actually
-cite — no acceptance criterion is met until its named test exists and
-passes), T-009 (`specs/spec002/TRACEABILITY.md`'s `LP-004`/`LP-009` rows), and
-T-010 (this file and `specs/README.md`, once T-007-T-009 are done). Start at
-T-008 — see `tasks.md`'s Test Coverage Map and `plan.md`'s worked fixture
-table (note the supply-sufficiency trap flagged there on the AC-002 fixture).
-
-After that, Phase 5 item 2 (multi-period settlement and scenario-tree
+**Next up: Phase 5 item 2** (multi-period settlement and scenario-tree
 extensions) remains entirely unstarted and, unlike item 1, has no domain
 grounding at all — see the Phase 5 entry above. Repeat the "write the spec
-first" pattern there too when it's picked up: `workflow_orchestrator` routing
-to `agents/optimization/problem_formulation/`, a new `specs/0010-*` directory
+first" pattern there too: `workflow_orchestrator` routing to
+`agents/optimization/problem_formulation/`, a new `specs/0010-*` directory
 (`0009` is now taken), tracked by the same `spec`/`spec-index` gates.
 `00_PLAN.md`'s own Phase 5 guidance — "promote an extension only after
 benchmark, convergence, and fallback behavior are documented" — is stricter
