@@ -80,8 +80,9 @@ Per `specs/spec002/00_PLAN.md`'s status line and `TRACEABILITY.md`:
   against the normative "Testing Strategy" section found `hypothesis` (a pinned
   dev dependency since T01) had never actually been used; `specs/0005-test-
   hardening/` closes that and four other real gaps — see its entry below.
-- **Not yet started:** Phase 5 item 2 (multi-period settlement/scenario-tree
-  extensions; `01_SPEC.md` §13) — see "Next priorities" below.
+- **Drafted, not approved:** `specs/0010-multi-period-settlement/` (Phase 5 item 2, deterministic
+  form; `01_SPEC.md` §22.11) — three open design questions need owner sign-off before any code is
+  written; see "Next priorities" below.
 
 ## Environment
 
@@ -319,14 +320,15 @@ this QP term (PWL/NLP and QP's other three candidate terms stay `SPECIFIED`).
 `tests/unit/test_qp_compiler.py`, `tests/unit/test_qp_support.py`,
 `tests/benchmark/test_qp_scale.py`); zero regressions in the pre-existing 172.
 
-### Phase 5 — Nonlinear and multi-period research (`01_SPEC.md` §14.4, §13; `00_PLAN.md`) — item 1 done (discrete form), item 2 not started
+### Phase 5 — Nonlinear and multi-period research (`01_SPEC.md` §14.4, §13; `00_PLAN.md`) — item 1 done (discrete form), item 2 drafted
 
 Two unrelated pieces. **Item 1 (joint fee/quantity pricing) is done, in its discrete form** —
-`specs/0009-discrete-fee-tier-pricing/` — see below. **Item 2 (multi-period
-settlement and scenario-tree extensions) has not started** and has no domain
-grounding at all: `FormulationConfig.planning_horizon_days` exists but is only
-a day-count scalar feeding `fee_revenue`, not a time-indexed decision
-sequence, so real multi-period work means new domain modeling from scratch.
+`specs/0009-discrete-fee-tier-pricing/` — see below. **Item 2 (multi-period settlement and
+scenario-tree extensions) is now drafted** as `specs/0010-multi-period-settlement/` (deterministic
+form only — see below); before this draft, it had no domain grounding at all:
+`FormulationConfig.planning_horizon_days` exists but is only a day-count scalar feeding
+`fee_revenue`, not a time-indexed decision sequence, so this really is new domain modeling from
+scratch, not an extension of something that already existed.
 
 `00_PLAN.md`'s own guidance for this phase — "promote an extension only after
 benchmark, convergence, and fallback behavior are documented" — is stricter
@@ -400,6 +402,58 @@ moment a cheaper tier is selected) — a single guarded line, inert for every un
 `specs/spec002/TRACEABILITY.md`'s `LP-004` row gains discrete-per-candidate-fee evidence; `LP-009`
 extends its `IMPLEMENTED` status to cover Section 12.4's discrete price-selection MIP (PWL/NLP —
 Section 14.3-14.4's continuous-fee case — and QP's other three candidate terms stay `SPECIFIED`).
+
+### Phase 5 item 2 — deterministic multi-period settlement (`01_SPEC.md` §22.11) — drafted, not approved (2026-09-07)
+
+`specs/0010-multi-period-settlement/` (`spec.md`, `plan.md`, `tasks.md`) — a **Draft** spec, not
+approved and not implemented. Unlike `0009`, this one carries **three open design questions that
+genuinely need owner judgment**, not just technical sign-off, so it is drafted more cautiously than
+`0009` was and should not be implemented as-is.
+
+The key finding that shaped it: §22.11 already specifies time-bucketed balance identities
+(`on_loan_i,t`/`available_i,t`/`lendable_i,t`) normatively, and says the deterministic form "should
+precede a fully stochastic formulation" (§22.12) — the same relationship `0009` used (V0's own
+"Deferred extensions" list excludes "joint continuous optimization of fee and quantity"; `0009`
+built the discrete alternative instead of the deferred thing itself). Here, V0 defers "multi-period
+*stochastic* optimization" specifically — the deterministic precursor is not itself excluded.
+
+**Two designs satisfy §22.11 and this draft recommends the narrower one, but does not decide it
+unilaterally:**
+
+- **Design A (rejected for now):** a full joint multi-period LP — time-indexed decision variables
+  for every route across every period, with the objective jointly optimizing the whole horizon.
+  The complete answer to §22.11, but multiplies variable/row count by route count × period count,
+  needs time-varying route bounds and a real calendar, and changes what "the decision" means
+  (period-0 allocation could legitimately be suboptimal *by itself* to help period 3).
+- **Design B (recommended, drafted):** period 0 stays exactly today's existing single-period
+  solve — the only period actually decided. Periods 1..N are a mechanical, unoptimized *projection*
+  of what already-known future `TradeEvent`s (a sale, a recall, a return, already dated — the exact
+  events §13.2 already says a single-period solve ignores past `effective_date`) will do to the
+  already-solved book, reusing `scenarios/apply.py`'s existing, already-tested per-event-type
+  mechanics (extracted into a shared `select_effective_events`/`apply_events` pair, called once per
+  period instead of once per scenario) rather than inventing new balance arithmetic. A new
+  `settlement/` package (mirroring `scenarios/`) and a new, separate `MultiPeriodProjection` result
+  type (mirroring `ScenarioComparison`/`StressTestReport`'s own precedent) — zero changes to
+  `formulation/`, `components/`, or any compiler.
+
+**Three open questions block approval**, each requiring real owner judgment rather than
+engineering sign-off: (1) is the projection form (B) the right first step, or does the desk need
+the fuller joint LP (A) from the outset — they answer materially different questions; (2) should a
+known future `RECALL` event be validated against `LoanRoute.recall_notice_days` in V1, or deferred
+(the draft defers it); (3) what per-day discount rate should V1 default to — the draft proposes
+zero (no discounting), matching this repo's other zero-default extensions.
+
+Also explicitly deferred, not attempted here: §22.12's stochastic/scenario-tree extension (chance
+constraints, CVaR, probability-weighted scenarios — 00_PLAN.md's own deferred-extensions list
+already excludes this); a real business-day/holiday calendar (no calendar port exists anywhere in
+this repo yet — every `planning_periods` date is treated as a valid settlement day for V1);
+corporate-action deltas; and a CLI subcommand (library function only, matching how `run_stress_test`
+shipped in `specs/0004-scenario-engine/`).
+
+**Do not implement this spec as scoped without owner sign-off on the three open questions above** —
+mirroring the process `specs/0009-discrete-fee-tier-pricing/` went through (drafted, then approved
+once its own three blocking questions were resolved), but with materially larger, more business-
+judgment-shaped questions this time.
 
 After Phase 5: the Bloomberg-enriched realism workstream and the agency/prime
 desk workstream — see `00_PLAN.md` for exit gates on each.
@@ -567,21 +621,22 @@ HiGHS/`CompiledProblem` stack — not a replacement for it. Verified concretely
 rules), Phase 4 (QP allocation-stability), the tabular result output spec, and
 Phase 5 item 1 (discrete fee-tier pricing) are all done**
 (2026-09-04, 2026-09-05 ×5, 2026-09-06, 2026-09-07) — see above. Branch
-`0009-discrete-fee-tier-pricing` carries the last of these and has not yet
-been merged to `main` or pushed anywhere (this repo has no GitHub remote
-configured at all yet — see "Open items" below); merge/rebase it onto `main`
-under whatever process the owner uses before starting new work from `main`.
+`0009-discrete-fee-tier-pricing` carried the last of these and has already been
+merged to `main` (fast-forward, local-only — this repo has no GitHub remote
+configured at all yet, see "Open items" below).
 
-**Next up: Phase 5 item 2** (multi-period settlement and scenario-tree
-extensions) remains entirely unstarted and, unlike item 1, has no domain
-grounding at all — see the Phase 5 entry above. Repeat the "write the spec
-first" pattern there too: `workflow_orchestrator` routing to
-`agents/optimization/problem_formulation/`, a new `specs/0010-*` directory
-(`0009` is now taken), tracked by the same `spec`/`spec-index` gates.
-`00_PLAN.md`'s own Phase 5 guidance — "promote an extension only after
-benchmark, convergence, and fallback behavior are documented" — is stricter
-than any prior phase's exit gate; budget real design-review time before
-implementation starts.
+**Next up: Phase 5 item 2 is drafted, not approved.**
+`specs/0010-multi-period-settlement/` (branch `0010-multi-period-settlement`, not yet merged) is a
+**Draft** spec — see its own entry above for the full account. Unlike item 1, this one's next step
+is **not** implementation: it carries three genuine, business-judgment design questions (projection
+vs. full joint multi-period LP; recall-notice validation in/out of V1; default discount rate) that
+need the owner's decision, not an agent's, before `tasks.md`'s T-001 can start. `00_PLAN.md`'s own
+Phase 5 guidance — "promote an extension only after benchmark, convergence, and fallback behavior
+are documented" — is stricter than any prior phase's exit gate; that stricter bar is exactly why
+this draft surfaces the fork explicitly rather than picking one silently the way earlier phases'
+narrower, more mechanical decisions could be made directly. Bring the three open questions to the
+owner; once resolved, update `spec.md`'s Status to Approved and proceed through `tasks.md` the same
+way `0009` did.
 
 ## Open items for the next agent (not yet resolved)
 
