@@ -7,7 +7,9 @@ from datetime import date, timedelta
 
 import pytest
 
+from inventory_optimizer.domain.enums import TradeEventType
 from inventory_optimizer.domain.requests import OptimizationRequest
+from inventory_optimizer.domain.scenarios import TradeEvent
 from inventory_optimizer.exceptions import InputValidationError
 from inventory_optimizer.validation import raise_if_invalid, validate_request
 
@@ -92,3 +94,69 @@ def test_demand_group_fee_inconsistency_is_reported(
 
     issues = validate_request(broken_request)
     assert any(issue.code == "DEMAND_GROUP_FEE_INCONSISTENT" for issue in issues)
+
+
+def test_recall_notice_insufficient_is_reported(
+    e1_request: OptimizationRequest, route_factory
+) -> None:
+    """specs/0010-multi-period-settlement/ AC-003: a known future RECALL giving less notice than
+    the route's own recall_notice_days is rejected, not silently honored."""
+    strict_route = route_factory(
+        "RT-STRICT", "DG-STRICT", fee_rate=0.02, borrower_id="BORROWER-STRICT",
+        recall_notice_days=5,
+    )
+    short_notice_recall = TradeEvent(
+        event_id="RECALL-SHORT",
+        event_type=TradeEventType.RECALL,
+        trade_date=e1_request.effective_date,
+        effective_date=e1_request.effective_date + timedelta(days=2),
+        settlement_date=e1_request.effective_date + timedelta(days=2),
+        quantity_shares=10.0,
+        route_id="RT-STRICT",
+        source="fixture",
+        source_version="v1",
+    )
+    broken_request = e1_request.model_copy(
+        update={
+            "routes": (*e1_request.routes, strict_route),
+            "planning_periods": (e1_request.effective_date + timedelta(days=3),),
+            "known_future_events": (short_notice_recall,),
+        }
+    )
+
+    issues = validate_request(broken_request)
+    assert any(issue.code == "RECALL_NOTICE_INSUFFICIENT" for issue in issues)
+
+
+def test_recall_notice_sufficient_is_accepted(
+    e1_request: OptimizationRequest, route_factory
+) -> None:
+    strict_route = route_factory(
+        "RT-STRICT", "DG-STRICT", fee_rate=0.02, borrower_id="BORROWER-STRICT",
+        recall_notice_days=5,
+    )
+    demand = e1_request.demand[0].model_copy(
+        update={"demand_group_id": "DG-STRICT", "borrower_id": "BORROWER-STRICT"}
+    )
+    sufficient_notice_recall = TradeEvent(
+        event_id="RECALL-OK",
+        event_type=TradeEventType.RECALL,
+        trade_date=e1_request.effective_date,
+        effective_date=e1_request.effective_date + timedelta(days=5),
+        settlement_date=e1_request.effective_date + timedelta(days=5),
+        quantity_shares=10.0,
+        route_id="RT-STRICT",
+        source="fixture",
+        source_version="v1",
+    )
+    request = e1_request.model_copy(
+        update={
+            "routes": (strict_route,),
+            "demand": (demand,),
+            "planning_periods": (e1_request.effective_date + timedelta(days=5),),
+            "known_future_events": (sufficient_notice_recall,),
+        }
+    )
+
+    issues = validate_request(request)
+    assert not any(issue.code == "RECALL_NOTICE_INSUFFICIENT" for issue in issues)

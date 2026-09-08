@@ -7,12 +7,12 @@
 > and carries a Definition of Done. No task without a requirement.
 
 **Status note:** approved 2026-09-07 (owner: build both designs, sequenced; validate recall
-notice; discount rate configurable, defaulting to zero). All tasks are `todo`. **Phase 1 (T-001
-through T-006) delivers the shared fields, recall-notice validation, and the deterministic
-projection — a complete, independently useful increment. Phase 2 (T-007 through T-010) delivers
-the joint multi-period LP on top of it.** Do not start Phase 2 before Phase 1's own tests
-(T-006) pass — Phase 2 reuses Phase 1's event-timing primitive and its correctness depends on
-Phase 1 being right first.
+notice; discount rate configurable, defaulting to zero). **Phase 1 (T-001 through T-006) is
+`done`** — the shared fields, recall-notice validation, and the deterministic projection, a
+complete, independently useful increment: 15 new tests (254 total, zero regressions in the
+pre-existing 239), including `apply_scenario`'s own 13 existing tests passing unchanged through
+the `select_effective_events`/`apply_events` extraction. **Phase 2 (T-007 through T-014, the
+joint multi-period LP) is `todo` — resume there.**
 
 ## Definition of Done (applies to every task)
 
@@ -35,12 +35,12 @@ Phase 1 being right first.
 
 | ID | Task | Covers | Status | Notes |
 | --- | --- | --- | --- | --- |
-| T-001 | Add `OptimizationRequest.planning_periods`/`.known_future_events` with validators (strictly increasing periods, all after `effective_date`; reject non-empty events with empty periods). | REQ-001, REQ-002 | todo | Optional and empty by default; an unset request is byte-identical to today's. |
-| T-002 | Add `validation/reconciliation.py::check_recall_notice_sufficiency`; wire into `reconcile()`. | REQ-003 | todo | Applies uniformly regardless of which phase later consumes the events. |
-| T-003 | Refactor `scenarios/apply.py`: extract `select_effective_events`/`apply_events` from `apply_scenario`'s inline logic; confirm `apply_scenario`'s own existing tests still pass unchanged. | REQ-004 | todo | Acceptance bar for reuse safety (RISK-003) — do this before T-004. |
-| T-004 | Add `settlement/__init__.py`, `settlement/project.py::project_multi_period` (period-zero settling, per-period event application via T-003's helpers, `PeriodBalance` construction, `mode="projected"`). | REQ-004, REQ-005, REQ-006 | todo | Pure function; no compiler dependency. |
-| T-005 | Add `domain/settlement.py::PeriodBalance`, `PeriodEconomics`, `MultiPeriodProjection` (with `mode`/`disclosure`); add `config/models.py::MultiPeriodConfig` (`daily_discount_rate`, default `0.0`) and wire into `InventoryOptimizerConfig`; wire `fee_revenue_coefficient` reuse + discount factor into `PeriodEconomics`. | REQ-007, REQ-008 | todo | Additive-only; a config predating this field behaves identically. |
-| T-006 | Phase 1 tests: `tests/golden/test_multi_period_settlement.py`, `tests/unit/test_settlement_project.py`, `tests/unit/test_domain_contracts.py`/reconciliation additions. Confirm all pre-existing tests still pass. | REQ-001 through REQ-008, NFR-001 through NFR-004 | todo | **Phase 1 gate — do not start Phase 2 until this is green.** See Test Coverage Map. |
+| T-001 | Add `OptimizationRequest.planning_periods`/`.known_future_events` with validators (strictly increasing periods, all after `effective_date`; reject non-empty events with empty periods). | REQ-001, REQ-002 | done | Optional and empty by default; an unset request is byte-identical to today's. |
+| T-002 | Add `validation/reconciliation.py::check_recall_notice_sufficiency`; wire into `reconcile()`. | REQ-003 | done | Notice measured `effective_date - trade_date` against the route's own `recall_notice_days`, not against `request.effective_date`. |
+| T-003 | Refactor `scenarios/apply.py`: extract `select_effective_events`/`apply_events` from `apply_scenario`'s inline logic; confirm `apply_scenario`'s own existing tests still pass unchanged. | REQ-004 | done | All 13 pre-existing `test_scenarios_apply.py` tests pass unchanged. |
+| T-004 | Add `settlement/__init__.py`, `settlement/project.py::project_multi_period` (period-zero settling, per-period event application via T-003's helpers, `PeriodBalance` construction, `mode="projected"`). | REQ-004, REQ-005, REQ-006 | done | Pure function; no compiler dependency. |
+| T-005 | Add `domain/settlement.py::PeriodBalance`, `PeriodEconomics`, `MultiPeriodProjection` (with `mode`/`disclosure`); add `config/models.py::MultiPeriodConfig` (`daily_discount_rate`, default `0.0`) and wire into `InventoryOptimizerConfig`; wire `fee_revenue_coefficient` reuse + discount factor into `PeriodEconomics`. | REQ-007, REQ-008 | done | Also promoted `fee_revenue.py`'s `DAY_COUNT_DIVISOR` from private to shared (one source of truth for `act_360`/`act_365`), reused here with a period-specific day count instead of `planning_horizon_days`. |
+| T-006 | Phase 1 tests: `tests/golden/test_multi_period_settlement.py`, `tests/unit/test_settlement_project.py`, `tests/unit/test_domain_contracts.py`/`test_validation.py` additions. Confirm all pre-existing tests still pass. | REQ-001 through REQ-008, NFR-001 through NFR-004 | done | 15 new tests; 254 passed, 2 skipped, zero regressions in the pre-existing 239. |
 | T-007 | Add `formulation/compiler_support.py::needs_multi_period`/`multi_period_conflict_issues` (fails closed on MIP/QP/fee-tier combination); add one `facade.py` auto-routing branch, checked before the existing MIP/QP dispatch. | REQ-012 | todo | Mirrors `needs_mip`/`needs_qp`'s existing pattern exactly. |
 | T-008 | Add `components/constraints/multi_period_balance.py` (period-indexed `inventory_balance`/`transition_identity`/`demand_cap`/`utilization_cap`/`reserve_buffer`/`counterparty_limit`) and the `_period_bound_adjustments` helper (Phase 2's own, distinct-from-`apply_events`, bound-tightening logic). | REQ-009, REQ-010 | todo | Period 0's rows are byte-identical to today's baseline formulas. |
 | T-009 | Add `components/objective_terms/multi_period_economics.py` (discounted per-period fee revenue + transition cost, generalized day-count fraction per period). | REQ-007, REQ-011 | todo | Reuses `fee_revenue_coefficient`'s price/fee/share/cost math unchanged; only `tau` becomes period-specific. |
@@ -56,14 +56,14 @@ Status values: `todo` | `in-progress` | `blocked` | `done`.
 
 | Acceptance criterion | Test(s) | Status |
 | --- | --- | --- |
-| AC-001 | Full suite rerun (LP/MIP/QP requests with empty `planning_periods`) | todo |
-| AC-002 | `test_domain_contracts.py::test_optimization_request_rejects_known_future_events_without_periods` | todo |
-| AC-003 | reconciliation test: `test_check_recall_notice_sufficiency_rejects_short_notice` | todo |
-| AC-004 | `test_multi_period_settlement.py::test_recall_lands_in_its_own_period_not_earlier` | todo |
-| AC-005 | `test_multi_period_settlement.py::test_period_economics_matches_hand_formula` | todo |
-| AC-006 | `test_multi_period_lp.py::test_known_future_recall_reduces_period_zero_allocation` | todo |
-| AC-007 | `test_multi_period_lp_compiler.py::test_mip_or_qp_trigger_combined_with_planning_periods_fails_closed` | todo |
-| AC-008 | `test_settlement_project.py::test_mode_is_projected`; `test_multi_period_lp_compiler.py::test_mode_is_jointly_optimized` | todo |
+| AC-001 | Full suite rerun (Phase 1: LP/MIP requests with empty `planning_periods`; Phase 2 will extend to QP) | done (Phase 1) |
+| AC-002 | `test_domain_contracts.py::test_optimization_request_rejects_known_future_events_without_periods` | done |
+| AC-003 | `test_validation.py::test_recall_notice_insufficient_is_reported`/`test_recall_notice_sufficient_is_accepted` | done |
+| AC-004 | `test_multi_period_settlement.py::test_recall_lands_in_its_own_period_not_earlier` | done |
+| AC-005 | `test_multi_period_settlement.py::test_period_economics_matches_hand_formula` | done |
+| AC-006 | `test_multi_period_lp.py::test_known_future_recall_reduces_period_zero_allocation` | todo (Phase 2) |
+| AC-007 | `test_multi_period_lp_compiler.py::test_mip_or_qp_trigger_combined_with_planning_periods_fails_closed` | todo (Phase 2) |
+| AC-008 | `test_settlement_project.py::test_mode_is_projected` (done); `test_multi_period_lp_compiler.py::test_mode_is_jointly_optimized` | partial — projected done, jointly_optimized todo (Phase 2) |
 
 ## Follow-ups
 

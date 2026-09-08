@@ -2,8 +2,14 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 import pytest
 from pydantic import ValidationError
+
+from inventory_optimizer.domain.enums import TradeEventType
+from inventory_optimizer.domain.requests import OptimizationRequest
+from inventory_optimizer.domain.scenarios import TradeEvent
 
 
 def test_security_inventory_is_frozen(inventory_factory) -> None:
@@ -81,6 +87,62 @@ def test_demand_forecast_rejects_unordered_candidate_fee_rates(demand_factory) -
     """AC-007."""
     with pytest.raises(ValidationError):
         demand_factory("DG-X", "BORROWER-X", fee_rate=0.02, candidate_fee_rates=(0.03, 0.02))
+
+
+def test_optimization_request_accepts_empty_planning_periods_by_default(e1_request) -> None:
+    """specs/0010-multi-period-settlement/ REQ-001: absent is the default."""
+    assert e1_request.planning_periods == ()
+    assert e1_request.known_future_events == ()
+
+
+def _revalidate(e1_request, **overrides: object) -> OptimizationRequest:
+    """``model_copy(update=...)`` deliberately skips validation (Pydantic v2) -- these tests need
+    the model-level validators to actually run, so rebuild through ``model_validate`` instead."""
+    return OptimizationRequest.model_validate({**e1_request.model_dump(), **overrides})
+
+
+def test_optimization_request_rejects_known_future_events_without_periods(e1_request) -> None:
+    """AC-002."""
+    event = TradeEvent(
+        event_id="RECALL-1",
+        event_type=TradeEventType.RECALL,
+        trade_date=e1_request.effective_date,
+        effective_date=e1_request.effective_date + timedelta(days=1),
+        settlement_date=e1_request.effective_date + timedelta(days=1),
+        quantity_shares=5.0,
+        route_id="RT-A",
+        source="fixture",
+        source_version="v1",
+    )
+    with pytest.raises(ValidationError):
+        _revalidate(e1_request, known_future_events=(event,))
+
+
+def test_optimization_request_rejects_planning_period_not_after_effective_date(e1_request) -> None:
+    with pytest.raises(ValidationError):
+        _revalidate(e1_request, planning_periods=(e1_request.effective_date,))
+
+
+def test_optimization_request_rejects_unordered_planning_periods(e1_request) -> None:
+    with pytest.raises(ValidationError):
+        _revalidate(
+            e1_request,
+            planning_periods=(
+                e1_request.effective_date + timedelta(days=3),
+                e1_request.effective_date + timedelta(days=1),
+            ),
+        )
+
+
+def test_optimization_request_rejects_duplicate_planning_periods(e1_request) -> None:
+    with pytest.raises(ValidationError):
+        _revalidate(
+            e1_request,
+            planning_periods=(
+                e1_request.effective_date + timedelta(days=1),
+                e1_request.effective_date + timedelta(days=1),
+            ),
+        )
 
 
 def test_demand_forecast_rejects_more_than_max_candidate_fee_tiers(demand_factory) -> None:
