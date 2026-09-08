@@ -429,8 +429,13 @@ its full 100 shares at period 0, `fee_rate=0.02`, `revenue_share=1.0`, `variable
 contains one `RECALL` (`route_id=RT-A`, `quantity_shares=40`, `trade_date=effective_date`,
 `effective_date=effective_date + 3 days` — 3 days' notice, satisfying `recall_notice_days=1`).
 Expected: period 1 equals period 0 exactly (no event lands in `(effective_date, +1]`); period 2's
-`on_loan_shares` drops `100 -> 60`, `available_to_lend_shares` rises `0 -> 40`. Period 2's
-undiscounted revenue = `10.0 * (1/360) * 0.02 * 60 = 0.0333...` (the post-recall quantity).
+`on_loan_shares` drops `100 -> 60`, `available_to_lend_shares` rises `0 -> 40`. Each period's own
+`day_count_fraction` is the gap *from the previous period boundary*, not a fixed constant: period
+1 spans 1 day (`effective_date` to `effective_date+1`), period 2 spans 2 days
+(`effective_date+1` to `effective_date+3`) -- period 0 itself uses the config's own
+`planning_horizon_days` (today's existing single-period `tau`), matching `result.economics`
+exactly. Period 2's undiscounted revenue = `10.0 * (2/360) * 0.02 * 60 = 0.0667` (the post-recall
+quantity, over its own 2-day period length).
 
 ### Worked fixture sketch — Phase 2 (Design A)
 
