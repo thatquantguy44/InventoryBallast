@@ -83,11 +83,16 @@ route's own contractual minimum) is rejected, not silently honored.
   (`domain/settlement.py::MultiPeriodProjection`) — mirroring how `ScenarioComparison`/
   `StressTestReport` are already distinct result types.
 - **Design A (joint multi-period LP):** a new compiler (`formulation/multi_period.py`) extending
-  every existing baseline LP component (unchanged for period 0; the identical structure,
-  period-parameterized, for periods 1..N) with time-indexed route-quantity/transition variables
-  per §22.11, auto-routed exactly like every other capability-gated extension (MIP, QP, discrete
-  fee tiers) — strictly opt-in, byte-identical single-period behavior when `planning_periods` is
-  empty.
+  every existing baseline LP component's mathematical structure (unchanged for period 0; the
+  identical structure, period-parameterized, for periods 1..N) with time-indexed route-quantity/
+  transition variables per §22.11, reached through its own new entry point
+  (`formulation.multi_period.solve_multi_period`) rather than folded into
+  `facade.InventoryOptimizer.optimize()`'s existing auto-routing — `optimize()` stays completely
+  unaware of `planning_periods` and always solves period 0 alone, which is *required*, not
+  incidental: Design B's own `project_multi_period` depends on being able to call `optimize()` on
+  a multi-period request and get back an ordinary, period-0-only `OptimizationResult` to project
+  forward. Strictly opt-in either way; byte-identical single-period behavior whenever a caller
+  uses `optimize()`, regardless of whether `planning_periods` is set.
 - One consistent result shape for both designs (`MultiPeriodProjection`, with a `mode` field
   distinguishing "projected" from "jointly optimized" periods), so a desk reads one report
   regardless of which design produced it.
@@ -141,7 +146,7 @@ route's own contractual minimum) is rejected, not silently honored.
 | REQ-009 | **(Design A)** The system shall introduce a new multi-period LP compiler (`formulation/multi_period.py`) with one route-quantity/transition-variable set per planning period (period 0 through N), compiling §22.11's balance identities as real per-period constraints, reusing every existing baseline LP component's exact mathematical structure (unchanged for period 0; period-parameterized, not re-derived, for periods 1..N). | must |
 | REQ-010 | **(Design A)** Known future events shall enter the joint LP as exogenous per-period bound/parameter adjustments (reusing REQ-003's timing/ordering rules), never as new decision variables. | must |
 | REQ-011 | **(Design A)** The objective shall jointly maximize discounted net revenue across every period, letting period-0 allocation account for a known future event rather than merely being reported against it afterward. | must |
-| REQ-012 | **(Design A)** A request with empty `planning_periods` shall compile via the existing `compile_lp`/`compile_mip`/`compile_qp` unchanged (byte-identical); a request combining `planning_periods` with any MIP/QP trigger shall fail closed with a structured issue rather than silently dropping one or the other. | must |
+| REQ-012 | **(Design A)** `formulation.multi_period.solve_multi_period` shall be a new, separate entry point (not folded into `facade.InventoryOptimizer.optimize()`'s existing dispatch); `optimize()` itself never reads `planning_periods` and always compiles/solves period 0 alone via the existing `compile_lp`/`compile_mip`/`compile_qp`, unchanged, which Design B's own projection depends on. `solve_multi_period` shall fail closed with a structured issue if the request also carries a MIP/QP/fee-tier trigger, rather than silently dropping one capability. | must |
 | REQ-013 | The system shall provide golden tests reproducing, by hand, fixtures for both designs: a known future `RECALL`/`BUY` projected across two periods (Design B), and a small joint-LP fixture where period-0's allocation genuinely differs from the single-period optimum because of a known future event (Design A) — proving the joint LP is not merely the projection in disguise. | must |
 
 ## Non-Functional Requirements

@@ -218,11 +218,22 @@ discount_factor_t = (1 + daily_discount_rate) ** -(boundary_t - effective_date).
 `fee_revenue_coefficient` itself (price, fee rate, revenue share, variable cost) is reused
 unchanged — only the day-count fraction it is multiplied by becomes period-specific, since fee
 rates/prices are held constant across the horizon (Non-Goals). This is a small, explicit
-generalization of T08's existing formula, not a new one: at `N=0` (no periods), `period_tau_0`
-would equal the config's own `planning_horizon_days`-based tau — but `N=0` never reaches this
-compiler (REQ-012), so today's `compile_lp` path is never touched.
+generalization of T08's existing formula, not a new one.
 
-### Auto-routing and the MIP/QP conflict (REQ-012)
+### A separate entry point, deliberately not folded into `optimize()`'s auto-routing (REQ-012)
+
+**Corrected from this plan's first draft, before implementation, after actually reading
+`facade.py`'s body (recorded here per constitution P8 rather than silently fixed):** the original
+draft assumed Phase 2 would add one more branch to `InventoryOptimizer.optimize()`'s existing
+`needs_mip`/`needs_qp` dispatch, the same way `specs/0006`/`0007`/`0009` each did. That pattern
+does not fit here. `optimize()` unconditionally builds a single-period `BuildContext` and returns
+an `OptimizationResult` — a shape Phase 2's per-period variables cannot populate. More importantly,
+**Phase 1's own `project_multi_period` requires `optimize()` to keep solving period 0 alone,
+completely unaware of `planning_periods`**, because that period-0-only `OptimizationResult` is
+its own required input. Auto-routing a multi-period request away from `optimize()`'s existing path
+would silently break Design B.
+
+So Phase 2 is a genuinely separate, parallel entry point instead:
 
 ```python
 def needs_multi_period(request: OptimizationRequest) -> bool:
@@ -231,9 +242,7 @@ def needs_multi_period(request: OptimizationRequest) -> bool:
 def multi_period_conflict_issues(request, config) -> tuple[ValidationIssue, ...]:
     if not needs_multi_period(request):
         return ()
-    if needs_mip(request) or needs_qp(config) or any(
-        f.candidate_fee_rates for f in request.demand
-    ):
+    if needs_mip(request) or needs_qp(config):   # needs_mip already covers fee-tier menus (0009)
         return (ValidationIssue(
             code="MULTI_PERIOD_MIP_QP_UNSUPPORTED",
             message=(
@@ -245,9 +254,13 @@ def multi_period_conflict_issues(request, config) -> tuple[ValidationIssue, ...]
     return ()
 ```
 
-`facade.InventoryOptimizer.optimize()` gains one more branch, checked **before** the existing
-MIP/QP dispatch: `if needs_multi_period(request): compile_multi_period_lp(...)`. This mirrors
-exactly how `needs_mip`/`needs_qp` are already checked in sequence.
+`formulation/multi_period.py::solve_multi_period(request, config, backend=None) ->
+MultiPeriodProjection` is the new top-level function a caller uses instead of `optimize()` when it
+wants the jointly-optimized answer — composing `raise_if_invalid` + `multi_period_conflict_issues`
++ `compile_multi_period_lp` + the configured `SolverBackend.solve` + `verify_solution` + its own
+result construction, mirroring `scenarios.runner.run_scenario`'s own precedent of a
+separate-but-parallel entry point rather than a branch inside `optimize()`. `facade.py` itself is
+untouched.
 
 ### Result unification (REQ-008)
 
@@ -270,15 +283,23 @@ scenarios/apply.py           select_effective_events / apply_events promoted fro
 settlement/__init__.py       (new package)
 settlement/project.py        (new) project_multi_period                      -- Phase 1
 
-formulation/multi_period.py  (new) compile_multi_period_lp                    -- Phase 2
+formulation/multi_period.py  (new) compile_multi_period_lp, solve_multi_period  -- Phase 2
 formulation/compiler_support.py + needs_multi_period, multi_period_conflict_issues
-components/constraints/multi_period_balance.py  (new) period-indexed inventory_balance/
-                                                  transition_identity/demand_cap/utilization_cap/
-                                                  reserve_buffer/counterparty_limit row builders
-components/objective_terms/multi_period_economics.py (new) discounted per-period fee_revenue/
-                                                  transition_cost
-facade.py                    + one more auto-routing branch (checked before MIP/QP)
 ```
+
+**Not** `components/constraints/multi_period_balance.py` as registered `@constraint_component`
+classes, as this plan's first draft sketched — corrected before implementation. The existing
+`ConstraintComponent`/`ObjectiveComponent` protocol's `contribute(self, context: BuildContext,
+builder: SparseBuilder)` has no period parameter, and every existing component hardcodes
+`VariableKey("q", route.route_id)` with no period suffix — reusing them unchanged for a *joint*
+LP (one shared `SparseBuilder`/variable index spanning every period) would collide period 0's `q`
+with period 5's `q` under the same key. Genuinely period-aware row construction needs period-
+suffixed keys these components don't know how to build. Rather than extending the shared
+component-registry protocol (used by every other compiler) just for this one compiler's sake,
+Phase 2's row/objective construction lives as plain functions directly inside
+`formulation/multi_period.py` — reusing each baseline component's *formula*, not its *code*,
+exactly as REQ-009 already says ("exact mathematical structure ... not re-derived"). `facade.py`
+is untouched (see "A separate entry point" above).
 
 No file under `solvers/`, `validation/solution_verifier.py` changes at all — Phase 2's
 `CompiledProblem` is structurally identical in shape to today's (sparse matrix, bounds,
@@ -360,7 +381,7 @@ New `specs/spec002/TRACEABILITY.md` rows (no existing row covers §22.11/§22.12
 | REQ-009 | `formulation/multi_period.py`; `components/constraints/multi_period_balance.py` | T-007, T-008 |
 | REQ-010 | `formulation/multi_period.py::_period_bound_adjustments` | T-008 |
 | REQ-011 | `components/objective_terms/multi_period_economics.py` | T-009 |
-| REQ-012 | `formulation/compiler_support.py::needs_multi_period`/`multi_period_conflict_issues`; `facade.py` | T-006, T-010 |
+| REQ-012 | `formulation/compiler_support.py::needs_multi_period`/`multi_period_conflict_issues`; `formulation/multi_period.py::solve_multi_period` (a new, separate entry point — `facade.py` is untouched) | T-007, T-010 |
 | REQ-013 | `tests/golden/test_multi_period_settlement.py`, `tests/golden/test_multi_period_lp.py` | T-011, T-012 |
 | NFR-001 | Full existing suite (239, pre-this-spec) unchanged | T-011, T-012 |
 | NFR-002 | No calendar dependency; documented simplification | spec.md Non-Goals |
