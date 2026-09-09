@@ -39,12 +39,26 @@ def _day_count_fraction(formulation_config: FormulationConfig) -> float:
 
 
 def fee_revenue_coefficient(
-    route: LoanRoute, inventory: SecurityInventory, formulation_config: FormulationConfig
+    route: LoanRoute,
+    inventory: SecurityInventory,
+    formulation_config: FormulationConfig,
+    *,
+    day_count_fraction: float | None = None,
 ) -> float:
     """The per-share ``q_j`` coefficient (Section 11.12). Shared by ``contribute()``,
     ``attribute()``, and ``reporting.explanations`` so all three agree on one formula rather than
-    each re-deriving it."""
-    tau = _day_count_fraction(formulation_config)
+    each re-deriving it.
+
+    ``day_count_fraction`` (specs/0010-multi-period-settlement/ Phase 2, T-009) overrides the
+    single-period ``tau`` derived from ``formulation_config.planning_horizon_days`` -- the joint
+    multi-period LP's objective (``components.objective_terms.multi_period_economics``) needs a
+    different, period-specific day-count fraction per period, but the price/fee/share/cost formula
+    itself is unchanged. ``None`` (every existing call site) preserves today's exact behavior.
+    """
+    if day_count_fraction is None:
+        tau = _day_count_fraction(formulation_config)
+    else:
+        tau = day_count_fraction
     return inventory.price_usd * tau * (
         route.fee_rate * route.revenue_share - route.variable_cost_rate
     )

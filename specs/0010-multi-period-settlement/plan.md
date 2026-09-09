@@ -479,6 +479,49 @@ multi_period_economics.py`, the two request fields, `MultiPeriodConfig`, and the
 check. No existing module's behavior changes for any request that leaves `planning_periods` empty
 (NFR-001). Observability is `MultiPeriodProjection.warnings`/`mode`/`disclosure`.
 
+## Deviations Discovered During Implementation
+
+**T-008.** Two bound-tightening rules this plan described only in prose (not as an explicit
+formula, unlike RECALL's "same `new_max` formula" callout) were resolved during implementation,
+recorded here per constitution P8 rather than picked silently:
+
+- **`RETURN`'s bound formula.** This plan's own "Design A's own event handling" table names both
+  `maximum_quantity_shares` *and* `hard_minimum_quantity_shares` as lowered by `RETURN`, while the
+  `RECALL` row names only the max (floored at the *unchanged* hard minimum, reusing
+  `_apply_trade_event`'s own formula). Implemented as: `RETURN` lowers both the cap and the floor
+  by the returned quantity (each floored at zero) -- a genuinely different formula from `RECALL`,
+  matching the asymmetry in this plan's own wording rather than assuming a typo.
+- **An already-ineligible route's bound at period `t >= 1`.** Not addressed anywhere in this plan.
+  Today's single-period `set_route_bounds` clamps an ineligible route's upper bound to its own
+  concrete `current_quantity_shares`; at period `t >= 1` there is no such scalar -- period `t-1`'s
+  quantity is itself a free decision variable, and expressing "may not exceed the previous period's
+  own solved value" needs a genuine constraint, not a static bound. No `known_future_event` type
+  ever flips a route from eligible to ineligible (only `NEW_LOAN` flips the other way), so this only
+  matters for a route that starts ineligible. V1 clamps such a route's upper bound, at every period,
+  to its own period-0 baseline `current_quantity_shares` instead -- never looser than today's
+  single-period behavior, and deferred rather than silently dropped.
+
+**T-009.** `fee_revenue_coefficient` (this plan's own "Data & Dependencies" section already called
+for generalizing it) gained an additive, keyword-only `day_count_fraction: float | None = None`
+parameter rather than a parallel duplicate formula -- every existing call site
+(`FeeRevenueTerm.contribute`/`.attribute`, `reporting.explanations`, `scenarios.compare`,
+`components.objective_terms.tier_pricing`) passes no such argument and is therefore byte-identical
+in behavior. Phase 1's `settlement.project._period_economics` was deliberately **not** refactored
+to call this newly-generalized function -- it already shipped and is fully tested, T-009's own task
+description scopes only the new Phase 2 module, and touching already-shipped code for a cosmetic
+reduction in duplication was judged not worth the risk here. The two implementations were
+cross-checked instead: `period_tau`/`period_discount_factor` (new, in
+`multi_period_economics.py`) independently reproduce `_period_economics`'s exact numbers at every
+period of a shared fixture (verified via an ad hoc smoke script, not a committed test). A future
+pass could still unify them if convenient; not required by any open acceptance criterion.
+
+Also folded into T-008 rather than deferred to T-010: `build_multi_period_variable_index` (the
+period-suffixed `q`/`inc`/`dec`/`a` blocks this plan's "Variables (REQ-009)" section describes) and
+`build_multi_period_context` (the Phase 2 analogue of `formulation.context.BuildContext`) -- the
+row-building functions need both to exist and be callable at all; T-010 remains the task that adds
+the objective term (T-009's own output) and ties everything into one `CompiledProblem` via
+`compile_multi_period_lp`/`solve_multi_period`.
+
 ## Open Questions
 
 - Whether a future spec should let fee rates/prices vary per period within `known_future_events`
