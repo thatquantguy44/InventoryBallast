@@ -1,7 +1,7 @@
 # Tasks: Multi-period settlement — deterministic projection and joint LP (Phase 5 item 2)
 
 - **Spec:** 0010-multi-period-settlement (`spec.md`, `plan.md`)
-- **Last updated:** 2026-09-07
+- **Last updated:** 2026-09-09
 
 > Ordered, testable units of work. Every task cites the requirement(s) it advances
 > and carries a Definition of Done. No task without a requirement.
@@ -11,8 +11,11 @@ notice; discount rate configurable, defaulting to zero). **Phase 1 (T-001 throug
 `done`** — the shared fields, recall-notice validation, and the deterministic projection, a
 complete, independently useful increment: 15 new tests (254 total, zero regressions in the
 pre-existing 239), including `apply_scenario`'s own 13 existing tests passing unchanged through
-the `select_effective_events`/`apply_events` extraction. **Phase 2 (T-007 through T-014, the
-joint multi-period LP) is `todo` — resume there.**
+the `select_effective_events`/`apply_events` extraction. **T-007 is also `done`** (merged to
+`main` alongside a Phase 1 fix — see its own row's Notes); this row was left `todo` at merge time
+and is corrected here (2026-09-09), a doc-sync gap, not a functional one — the code and its tests
+were already present and passing. **Phase 2's remaining tasks (T-008 through T-014, the joint
+multi-period LP) are `todo` — resume there.**
 
 ## Definition of Done (applies to every task)
 
@@ -41,7 +44,7 @@ joint multi-period LP) is `todo` — resume there.**
 | T-004 | Add `settlement/__init__.py`, `settlement/project.py::project_multi_period` (period-zero settling, per-period event application via T-003's helpers, `PeriodBalance` construction, `mode="projected"`). | REQ-004, REQ-005, REQ-006 | done | Pure function; no compiler dependency. |
 | T-005 | Add `domain/settlement.py::PeriodBalance`, `PeriodEconomics`, `MultiPeriodProjection` (with `mode`/`disclosure`); add `config/models.py::MultiPeriodConfig` (`daily_discount_rate`, default `0.0`) and wire into `InventoryOptimizerConfig`; wire `fee_revenue_coefficient` reuse + discount factor into `PeriodEconomics`. | REQ-007, REQ-008 | done | Also promoted `fee_revenue.py`'s `DAY_COUNT_DIVISOR` from private to shared (one source of truth for `act_360`/`act_365`), reused here with a period-specific day count instead of `planning_horizon_days`. |
 | T-006 | Phase 1 tests: `tests/golden/test_multi_period_settlement.py`, `tests/unit/test_settlement_project.py`, `tests/unit/test_domain_contracts.py`/`test_validation.py` additions. Confirm all pre-existing tests still pass. | REQ-001 through REQ-008, NFR-001 through NFR-004 | done | 15 new tests; 254 passed, 2 skipped, zero regressions in the pre-existing 239. |
-| T-007 | Add `formulation/compiler_support.py::needs_multi_period`/`multi_period_conflict_issues` (fails closed on MIP/QP/fee-tier combination). | REQ-012 | todo | Mirrors `needs_mip`/`needs_qp`'s existing pattern; **no `facade.py` change** — `optimize()` must keep ignoring `planning_periods` since Phase 1 depends on that (plan.md's corrected "separate entry point" section). |
+| T-007 | Add `formulation/compiler_support.py::needs_multi_period`/`multi_period_conflict_issues` (fails closed on MIP/QP/fee-tier combination). | REQ-012 | done | Mirrors `needs_mip`/`needs_qp`'s existing pattern; **no `facade.py` change** — `optimize()` must keep ignoring `planning_periods` since Phase 1 depends on that (plan.md's corrected "separate entry point" section). Status corrected 2026-09-09 — code was committed and merged but this row was left `todo`. Its own dedicated test (AC-007) is still pending under T-011, the same sequencing T-001–T-005 used ahead of T-006. |
 | T-008 | Inside `formulation/multi_period.py`: period-indexed row-building functions for `inventory_balance`/`transition_identity`/`demand_cap`/`utilization_cap`/`reserve_buffer`/`counterparty_limit`, plus the `_period_bound_adjustments` helper (Phase 2's own, distinct-from-`apply_events`, bound-tightening logic). | REQ-009, REQ-010 | todo | Plain functions, not registered components (plan.md's corrected Architecture section explains why); period 0's rows are byte-identical to today's baseline formulas. |
 | T-009 | Add `components/objective_terms/multi_period_economics.py` (discounted per-period fee revenue + transition cost, generalized day-count fraction per period). | REQ-007, REQ-011 | todo | Reuses `fee_revenue_coefficient`'s price/fee/share/cost math unchanged; only `tau` becomes period-specific. |
 | T-010 | Add `formulation/multi_period.py::compile_multi_period_lp` tying T-007 through T-009 together, plus `solve_multi_period` (the new, separate entry point: validate + compile + solve + verify + `mode="jointly_optimized"` result construction, reusing `domain/settlement.py` from T-005). | REQ-009 through REQ-012 | todo | No changes to `solvers/highs.py`, `validation/solution_verifier.py`, or `facade.py` — the `CompiledProblem` shape is structurally an ordinary LP, and `solve_multi_period` composes the same stages `optimize()` does without touching it. |
