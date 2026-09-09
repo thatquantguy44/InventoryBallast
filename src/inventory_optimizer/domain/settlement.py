@@ -18,6 +18,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
+from inventory_optimizer.domain.enums import SolverStatus
+
 MultiPeriodMode = Literal["projected", "jointly_optimized"]
 
 _DISCLOSURE_BY_MODE: dict[MultiPeriodMode, str] = {
@@ -67,12 +69,18 @@ class PeriodEconomics(BaseModel):
 
 class MultiPeriodProjection(BaseModel):
     """Frozen boundary contract. See this module's own docstring for the two sanctioned
-    constructors and what ``mode`` means."""
+    constructors and what ``mode`` means. ``status`` mirrors ``OptimizationResult``'s own honest-
+    status discipline: when there is no feasible primal to report against (period 0 infeasible for
+    ``"projected"``; the joint LP itself infeasible/no-primal for ``"jointly_optimized"``),
+    ``balances``/``economics`` are empty rather than zero-filled placeholders, and a warning is
+    recorded -- never raised, matching how ``reporting.result_builder`` handles the same case for
+    ``OptimizationResult``."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     request_id: str
     mode: MultiPeriodMode
+    status: SolverStatus
     planning_periods: tuple[date, ...]
     balances: tuple[PeriodBalance, ...]
     economics: tuple[PeriodEconomics, ...]

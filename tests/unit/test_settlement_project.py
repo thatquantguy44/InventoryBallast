@@ -9,7 +9,8 @@ from datetime import UTC, date, datetime, timedelta
 
 import pytest
 
-from inventory_optimizer.domain.enums import TradeEventType
+from inventory_optimizer.domain.enums import SolverStatus, TradeEventType
+from inventory_optimizer.domain.policies import UtilizationPolicy
 from inventory_optimizer.domain.requests import OptimizationRequest
 from inventory_optimizer.domain.scenarios import TradeEvent
 from inventory_optimizer.facade import InventoryOptimizer
@@ -111,6 +112,55 @@ def test_mode_is_projected(
 
     assert projection.mode == "projected"
     assert "not a re-optimized plan" in projection.disclosure
+
+
+def test_projection_with_no_feasible_primal_is_empty_with_status_and_warning(
+    inventory_factory, route_factory, demand_factory, default_config
+) -> None:
+    """Mirrors ``reporting.result_builder``'s own honest-status discipline: an infeasible period 0
+    produces no balances/economics rather than zero-filled placeholders, carries the solver's own
+    status, and records a warning instead of raising."""
+    inventory = inventory_factory(total_lendable_shares=100.0, available_to_lend_shares=100.0)
+    route = route_factory("RT-A", "DG-A", fee_rate=0.02, maximum_quantity_shares=100.0)
+    demand = demand_factory("DG-A", "BORROWER-RT-A", fee_rate=0.02, reference_quantity_shares=100.0)
+    cap_policy = UtilizationPolicy(
+        policy_id="UP-CAP",
+        inventory_pool_id="POOL-1",
+        effective_from=_AS_OF,
+        maximum_utilization=0.30,
+        source="fixture",
+        source_version="v1",
+    )
+    floor_policy = UtilizationPolicy(
+        policy_id="UP-FLOOR",
+        inventory_pool_id="POOL-1",
+        effective_from=_AS_OF,
+        minimum_utilization=0.90,
+        source="fixture",
+        source_version="v1",
+    )
+    request = OptimizationRequest(
+        request_id="REQ-MP-INFEASIBLE",
+        as_of=_AS_OF,
+        effective_date=_EFFECTIVE_DATE,
+        inventory=(inventory,),
+        routes=(route,),
+        demand=(demand,),
+        utilization_policies=(cap_policy, floor_policy),
+        planning_periods=(_EFFECTIVE_DATE + timedelta(days=1),),
+    )
+    optimizer = InventoryOptimizer(config=default_config)
+    result = optimizer.optimize(request)
+    assert result.status is SolverStatus.INFEASIBLE
+
+    projection = project_multi_period(request, result, default_config)
+
+    assert projection.mode == "projected"
+    assert projection.status is SolverStatus.INFEASIBLE
+    assert projection.balances == ()
+    assert projection.economics == ()
+    assert projection.total_discounted_net_revenue_usd == 0.0
+    assert any("no feasible primal" in warning for warning in projection.warnings)
 
 
 def test_project_multi_period_rejects_empty_planning_periods(e1_request, default_config) -> None:
