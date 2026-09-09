@@ -42,12 +42,8 @@ def _settle_period_zero(
     and each inventory's already-independently-verified post-solve balance becomes its own
     ``on_loan_shares``/``available_to_lend_shares``. ``total_lendable_shares``/``reserved_shares``/
     ``committed_out_shares`` are untouched -- solving never changes what is held, only how it is
-    allocated."""
-    if not result.verification.has_primal:
-        raise ValueError(
-            "cannot project a multi-period settlement from a result with no feasible primal "
-            f"(request_id={request.request_id!r})"
-        )
+    allocated. Callers must check ``result.verification.has_primal`` first (see
+    ``project_multi_period``'s own early return) -- this assumes a feasible primal exists."""
     quantity_by_route = {a.route_id: a.post_quantity_shares for a in result.allocations}
     balance_by_inventory = {b.inventory_id: b for b in result.balances}
 
@@ -110,6 +106,21 @@ def project_multi_period(
             f"(request_id={request.request_id!r})"
         )
 
+    if not result.verification.has_primal:
+        return MultiPeriodProjection(
+            request_id=request.request_id,
+            mode="projected",
+            status=result.status,
+            planning_periods=request.planning_periods,
+            balances=(),
+            economics=(),
+            total_discounted_net_revenue_usd=0.0,
+            warnings=(
+                "no feasible primal in period 0; multi-period projection not produced",
+            ),
+            disclosure=disclosure_for_mode("projected"),
+        )
+
     day_divisor = DAY_COUNT_DIVISOR[config.formulation.day_count_basis]
     daily_rate = config.multi_period.daily_discount_rate
 
@@ -168,6 +179,7 @@ def project_multi_period(
     return MultiPeriodProjection(
         request_id=request.request_id,
         mode="projected",
+        status=result.status,
         planning_periods=request.planning_periods,
         balances=tuple(balances),
         economics=tuple(economics),
