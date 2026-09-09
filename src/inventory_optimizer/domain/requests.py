@@ -8,6 +8,12 @@ identity fields. Schedule tuples (``eligibility_schedules``, ``collateral_schedu
 ``indemnification_policies``, ``agreement_netting_sets``, ``balance_sheet_budgets``) are additive
 fields introduced alongside their owning subsystems (T29-T33, T35-T39); adding them is not expected
 to change the fields defined here.
+
+``planning_periods``/``known_future_events`` (specs/0010-multi-period-settlement/) are Section
+22.11's multi-period settlement extension: an optional, empty-by-default ordered sequence of future
+dates and the already-known ``TradeEvent``s (reusing ``domain.scenarios.TradeEvent`` unchanged,
+never routed through ``Scenario``) that settle across them. Absent, a request behaves exactly as it
+always has.
 """
 
 from __future__ import annotations
@@ -16,13 +22,14 @@ from collections.abc import Mapping
 from datetime import date
 from types import MappingProxyType
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, JsonValue, field_serializer
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, JsonValue, field_serializer, model_validator
 
 from inventory_optimizer.domain.demand import DemandForecast
 from inventory_optimizer.domain.enums import ProblemFamily
 from inventory_optimizer.domain.inventory import SecurityInventory
 from inventory_optimizer.domain.loans import LoanRoute
 from inventory_optimizer.domain.policies import CounterpartyLimit, UtilizationPolicy
+from inventory_optimizer.domain.scenarios import TradeEvent
 
 
 class DeskContext(BaseModel):
@@ -56,6 +63,8 @@ class OptimizationRequest(BaseModel):
     demand: tuple[DemandForecast, ...]
     counterparty_limits: tuple[CounterpartyLimit, ...] = ()
     utilization_policies: tuple[UtilizationPolicy, ...] = ()
+    planning_periods: tuple[date, ...] = ()
+    known_future_events: tuple[TradeEvent, ...] = ()
     config_overrides: Mapping[str, JsonValue] = Field(default_factory=lambda: MappingProxyType({}))
     metadata: Mapping[str, str] = Field(default_factory=lambda: MappingProxyType({}))
 
@@ -66,3 +75,24 @@ class OptimizationRequest(BaseModel):
         Converting to a plain ``dict`` only at the serialization boundary keeps the in-memory
         immutability guarantee the default was chosen for."""
         return dict(value)
+
+    @model_validator(mode="after")
+    def _check_planning_periods(self) -> OptimizationRequest:
+        periods = self.planning_periods
+        if any(period <= self.effective_date for period in periods):
+            raise ValueError(
+                f"planning_periods must all be strictly later than effective_date "
+                f"({self.effective_date!r}); got {periods!r}"
+            )
+        for previous, current in zip(periods, periods[1:]):
+            if current <= previous:
+                raise ValueError(
+                    f"planning_periods must be strictly increasing and free of duplicates "
+                    f"(got {periods!r})"
+                )
+        if self.known_future_events and not periods:
+            raise ValueError(
+                "known_future_events requires a non-empty planning_periods -- otherwise none of "
+                "these events could ever be applied"
+            )
+        return self

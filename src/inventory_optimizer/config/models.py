@@ -96,6 +96,18 @@ class ObjectiveConfig(BaseModel):
     allocation_stability_penalty: float = Field(default=0.0, ge=0.0)
 
 
+class MultiPeriodConfig(BaseModel):
+    """specs/0010-multi-period-settlement/: the per-day discount rate applied to both the
+    deterministic projection's and the joint multi-period LP's per-period economics. Zero (the
+    default) means "no discounting configured" -- a config predating this field behaves
+    identically, the same zero-default convention ``ObjectiveConfig.allocation_stability_penalty``
+    already established."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    daily_discount_rate: float = Field(default=0.0, ge=0.0)
+
+
 class InventoryOptimizerConfig(BaseModel):
     """Section 8.2. Frozen after validation; unknown top-level or nested keys fail closed."""
 
@@ -108,3 +120,4 @@ class InventoryOptimizerConfig(BaseModel):
     observability: ObservabilityConfig = Field(default_factory=ObservabilityConfig)
     elasticity: ElasticityConfig = Field(default_factory=ElasticityConfig)
     objective: ObjectiveConfig = Field(default_factory=ObjectiveConfig)
+    multi_period: MultiPeriodConfig = Field(default_factory=MultiPeriodConfig)

@@ -203,3 +203,37 @@ def miqp_conflict_issues() -> tuple[ValidationIssue, ...]:
             location="request",
         ),
     )
+
+
+def needs_multi_period(request: OptimizationRequest) -> bool:
+    """specs/0010-multi-period-settlement/ Phase 2: a request opts into the joint multi-period LP
+    purely by supplying ``planning_periods`` -- the same "strictly opt-in, empty means untouched"
+    convention every other capability-gated extension in this repo already follows."""
+    return bool(request.planning_periods)
+
+
+def multi_period_conflict_issues(
+    request: OptimizationRequest, config: InventoryOptimizerConfig
+) -> tuple[ValidationIssue, ...]:
+    """Phase 2's V1 is a pure continuous LP across periods -- combining ``planning_periods`` with
+    any MIP trigger, a configured QP penalty, or a fee-tier menu is not supported in the same
+    compile, mirroring exactly how MIP+QP already fails closed (``miqp_conflict_issues``) rather
+    than silently dropping one capability. Every prior phase in this repo built its baseline
+    before combining it with the next (LP before MIP, MIP before QP); this follows the same
+    discipline instead of attempting all of them jointly at once."""
+    if not needs_multi_period(request):
+        return ()
+    if needs_mip(request) or needs_qp(config):
+        return (
+            ValidationIssue(
+                code="MULTI_PERIOD_MIP_QP_UNSUPPORTED",
+                message=(
+                    "combining planning_periods with a MIP-triggering route/policy, a fee-tier "
+                    "menu, or a configured allocation_stability_penalty is not supported in the "
+                    "same compile -- Section 22.11's joint multi-period LP is a pure continuous "
+                    "LP for V1; disable one"
+                ),
+                location="request.planning_periods",
+            ),
+        )
+    return ()

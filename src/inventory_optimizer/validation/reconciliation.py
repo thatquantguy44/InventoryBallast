@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from collections import Counter, defaultdict
 
+from inventory_optimizer.domain.enums import TradeEventType
 from inventory_optimizer.domain.requests import OptimizationRequest
 from inventory_optimizer.exceptions import ValidationIssue
 
@@ -192,6 +193,39 @@ def check_demand_group_fee_consistency(request: OptimizationRequest) -> tuple[Va
     return tuple(issues)
 
 
+def check_recall_notice_sufficiency(request: OptimizationRequest) -> tuple[ValidationIssue, ...]:
+    """specs/0010-multi-period-settlement/ REQ-003: a known future ``RECALL`` must give the
+    referenced route at least its own ``recall_notice_days`` of notice -- measured from when the
+    recall was issued (``trade_date``) to when it takes effect (``effective_date``), not from
+    ``request.effective_date`` (which would measure "how far in the future this is from today,"
+    not "how much notice the borrower actually got"). Applies uniformly regardless of which
+    downstream design (the deterministic projection or the joint multi-period LP) later consumes
+    ``known_future_events`` -- an operationally impossible recall is rejected here, once, rather
+    than silently honored by either."""
+    routes_by_id = {route.route_id: route for route in request.routes}
+    issues: list[ValidationIssue] = []
+    for idx, event in enumerate(request.known_future_events):
+        if event.event_type is not TradeEventType.RECALL:
+            continue
+        route = routes_by_id.get(event.route_id)
+        if route is None:
+            continue  # unresolved route_id is already reported by check_foreign_keys
+        notice_days = (event.effective_date - event.trade_date).days
+        if notice_days < route.recall_notice_days:
+            issues.append(
+                ValidationIssue(
+                    code="RECALL_NOTICE_INSUFFICIENT",
+                    message=(
+                        f"known_future_events[{idx}] (event_id={event.event_id!r}) gives "
+                        f"{notice_days} day(s) notice, less than route {event.route_id!r}'s "
+                        f"recall_notice_days ({route.recall_notice_days!r})"
+                    ),
+                    location=f"known_future_events[{idx}].effective_date",
+                )
+            )
+    return tuple(issues)
+
+
 def reconcile(request: OptimizationRequest) -> tuple[ValidationIssue, ...]:
     """Run every reconciliation check and aggregate issues."""
     return (
@@ -201,4 +235,5 @@ def reconcile(request: OptimizationRequest) -> tuple[ValidationIssue, ...]:
         + check_term_and_recall_timing(request)
         + check_demand_group_consistency(request)
         + check_demand_group_fee_consistency(request)
+        + check_recall_notice_sufficiency(request)
     )

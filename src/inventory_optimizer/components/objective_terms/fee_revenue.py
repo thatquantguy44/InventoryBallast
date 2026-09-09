@@ -24,14 +24,17 @@ from inventory_optimizer.formulation.indexes import VariableKey
 from inventory_optimizer.formulation.sparse_builder import SparseBuilder
 from inventory_optimizer.reporting.types import ObjectiveAttribution, VerifiedSolution
 
-_DAY_COUNT_DIVISOR = {DayCountBasis.ACT_360: 360.0, DayCountBasis.ACT_365: 365.0}
+# Public (not module-private): specs/0010-multi-period-settlement/ reuses this same divisor map
+# with a period-specific day count instead of `planning_horizon_days` -- one source of truth for
+# what "act_360"/"act_365" mean, not a second copy.
+DAY_COUNT_DIVISOR = {DayCountBasis.ACT_360: 360.0, DayCountBasis.ACT_365: 365.0}
 
 COMPONENT_NAME = "fee_revenue"
 COMPONENT_VERSION = "1"
 
 
 def _day_count_fraction(formulation_config: FormulationConfig) -> float:
-    divisor = _DAY_COUNT_DIVISOR[formulation_config.day_count_basis]
+    divisor = DAY_COUNT_DIVISOR[formulation_config.day_count_basis]
     return formulation_config.planning_horizon_days / divisor
 
 
