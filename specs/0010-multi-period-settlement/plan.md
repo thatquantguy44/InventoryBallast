@@ -501,6 +501,20 @@ recorded here per constitution P8 rather than picked silently:
   to its own period-0 baseline `current_quantity_shares` instead -- never looser than today's
   single-period behavior, and deferred rather than silently dropped.
 
+**T-009.** `fee_revenue_coefficient` (this plan's own "Data & Dependencies" section already called
+for generalizing it) gained an additive, keyword-only `day_count_fraction: float | None = None`
+parameter rather than a parallel duplicate formula -- every existing call site
+(`FeeRevenueTerm.contribute`/`.attribute`, `reporting.explanations`, `scenarios.compare`,
+`components.objective_terms.tier_pricing`) passes no such argument and is therefore byte-identical
+in behavior. Phase 1's `settlement.project._period_economics` was deliberately **not** refactored
+to call this newly-generalized function -- it already shipped and is fully tested, T-009's own task
+description scopes only the new Phase 2 module, and touching already-shipped code for a cosmetic
+reduction in duplication was judged not worth the risk here. The two implementations were
+cross-checked instead: `period_tau`/`period_discount_factor` (new, in
+`multi_period_economics.py`) independently reproduce `_period_economics`'s exact numbers at every
+period of a shared fixture (verified via an ad hoc smoke script, not a committed test). A future
+pass could still unify them if convenient; not required by any open acceptance criterion.
+
 Also folded into T-008 rather than deferred to T-010: `build_multi_period_variable_index` (the
 period-suffixed `q`/`inc`/`dec`/`a` blocks this plan's "Variables (REQ-009)" section describes) and
 `build_multi_period_context` (the Phase 2 analogue of `formulation.context.BuildContext`) -- the
