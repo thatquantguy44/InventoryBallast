@@ -185,14 +185,27 @@ Phase 1 uses, but accumulates **bound deltas** per period instead of mutating a 
 BUY/TRANSFER_IN  @ period t  ->  total_lendable_i delta for periods >= t
 SELL/TRANSFER_OUT@ period t  ->  total_lendable_i delta for periods >= t (negative)
 NEW_LOAN         @ period t  ->  route j's maximum_quantity_shares raised for periods >= t
-RETURN           @ period t  ->  route j's maximum_quantity_shares/hard_minimum lowered for
-                                   periods >= t (the route simply may not return to its old level)
+RETURN           @ period t  ->  route j's maximum_quantity_shares lowered for periods >= t (the
+                                   route simply may not return to its old level), floored at the
+                                   route's own hard_minimum_quantity_shares -- see resolved reading
+                                   below
 RECALL           @ period t  ->  route j's maximum_quantity_shares lowered for periods >= t
                                    (same `new_max` formula `_apply_trade_event`'s RECALL branch
                                    already uses: `max(maximum_quantity_shares - qty,
                                    hard_minimum_quantity_shares)`), REQ-003's notice check already
                                    guarantees this is operationally honorable
 ```
+
+**RETURN's bound formula, resolved (T-008, before implementation):** the table row above originally
+read "`maximum_quantity_shares`/`hard_minimum` lowered ... the route simply may not return to its
+old level," which does not spell out a magnitude the way RECALL's row does. Read literally alongside
+RECALL's explicit formula, the most consistent interpretation is that RETURN uses the *identical*
+formula to RECALL: `new_max = max(route.maximum_quantity_shares - event.quantity_shares,
+route.hard_minimum_quantity_shares)` -- i.e. "hard_minimum" in the original sentence means "floored
+at," not "also reduced." `route.hard_minimum_quantity_shares` itself is never adjusted by either
+event type; it is Design A's period-invariant floor throughout. `formulation/multi_period.py::
+_period_bound_adjustments` implements this reading for both RETURN and RECALL via one shared code
+path (constitution P8: recorded here, not silently picked in code alone).
 
 This is recorded explicitly as a *related* reuse (same event semantics and ordering, same formulas
 for the *bound* a given event implies) rather than a literal call to `apply_events`, because the two

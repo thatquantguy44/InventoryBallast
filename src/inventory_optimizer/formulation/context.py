@@ -82,7 +82,12 @@ class BuildContext:
     tier_caps: Mapping[str, tuple[EvaluatedDemand, ...]]
 
 
-def _group_by(items: Iterable[T], *, key: Callable[[T], str]) -> dict[str, tuple[T, ...]]:
+def group_by(items: Iterable[T], *, key: Callable[[T], str]) -> dict[str, tuple[T, ...]]:
+    """Public (not module-private): specs/0010-multi-period-settlement/'s
+    ``formulation.multi_period`` needs this identical grouping (route ids don't change per period,
+    only certain bound *values* do) -- promoted from private the same way
+    ``objective_terms.fee_revenue.DAY_COUNT_DIVISOR`` was promoted from private to shared, rather
+    than duplicating this 4-line helper."""
     grouped: dict[str, list[T]] = defaultdict(list)
     for item in items:
         grouped[key(item)].append(item)
@@ -96,7 +101,7 @@ def _compute_demand_caps(
     group is its routes' shared ``fee_rate`` (uniform by Section 12.2, already enforced by
     ``validation.reconciliation.check_demand_group_fee_consistency``); a group with no routes yet
     falls back to its own reference fee."""
-    routes_by_group = _group_by(request.routes, key=lambda route: route.demand_group_id)
+    routes_by_group = group_by(request.routes, key=lambda route: route.demand_group_id)
     caps: dict[str, EvaluatedDemand] = {}
     for forecast in request.demand:
         group_routes = routes_by_group.get(forecast.demand_group_id, ())
@@ -162,7 +167,7 @@ def build_context(request: OptimizationRequest, config: InventoryOptimizerConfig
     ``formulation.lp.compile_lp``/``formulation.mip.compile_mip`` build internally, exposed so any
     caller needing one (T12's facade, in order to build a ``reporting.types.VerifiedSolution``)
     does not have to duplicate or reach into another module's private helpers."""
-    routes_by_inventory = _group_by(request.routes, key=lambda route: route.inventory_id)
+    routes_by_inventory = group_by(request.routes, key=lambda route: route.inventory_id)
     activation_route_ids = _compute_activation_route_ids(request, routes_by_inventory)
     lot_size_route_ids = frozenset(
         route.route_id for route in request.routes if route.lot_size_shares is not None
@@ -201,8 +206,8 @@ def build_context(request: OptimizationRequest, config: InventoryOptimizerConfig
         demand_caps=_compute_demand_caps(request, config.elasticity),
         inventory_by_id={inventory.inventory_id: inventory for inventory in request.inventory},
         routes_by_inventory=routes_by_inventory,
-        routes_by_demand_group=_group_by(request.routes, key=lambda route: route.demand_group_id),
-        routes_by_borrower=_group_by(request.routes, key=lambda route: route.borrower_id),
+        routes_by_demand_group=group_by(request.routes, key=lambda route: route.demand_group_id),
+        routes_by_borrower=group_by(request.routes, key=lambda route: route.borrower_id),
         activation_route_ids=activation_route_ids,
         lot_size_route_ids=lot_size_route_ids,
         tiered_demand_group_ids=tiered_demand_group_ids,
