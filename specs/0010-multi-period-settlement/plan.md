@@ -364,7 +364,7 @@ class MultiPeriodConfig(BaseModel):
 
 ## Traceability Matrix
 
-New `specs/spec002/TRACEABILITY.md` rows (no existing row covers §22.11/§22.12): `MPS-001`
+New `specs/engine_spec/TRACEABILITY.md` rows (no existing row covers §22.11/§22.12): `MPS-001`
 (deterministic multi-period balance projection, §22.11, Phase 1), `MPS-002` (joint multi-period LP,
 §22.11, Phase 2), `MPS-003` (recall-notice validation).
 

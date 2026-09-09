@@ -1,6 +1,6 @@
 """Shared fixtures for inventory_optimizer tests.
 
-``e1_request`` builds the E1 "Scarce-Name Allocation" fixture from ``specs/spec002/EXAMPLES.md``:
+``e1_request`` builds the E1 "Scarce-Name Allocation" fixture from ``specs/engine_spec/EXAMPLES.md``:
 100 lendable shares, no reserve/committed, a 90% utilization cap, and two candidate routes (A at
 2.00% fee, B at 1.00% fee) each demanding up to 80 shares. ``tests/golden/`` compiles it through
 ``formulation.lp.compile_lp`` and checks the exact allocation.

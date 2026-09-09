@@ -19,7 +19,7 @@ type, `InventoryOptimizer.config`).
 - No secrets, credentials, or private data introduced.
 - A scenario-modified `OptimizationRequest` is never round-tripped through `model_validate`/
   `model_dump_json`-then-reload anywhere in `scenarios/`/`cli.py` (NFR-003).
-- `specs/spec002/TRACEABILITY.md`'s `SCN-001`-`SCN-003` rows and `docs/handoff.md`'s "Next
+- `specs/engine_spec/TRACEABILITY.md`'s `SCN-001`-`SCN-003` rows and `docs/handoff.md`'s "Next
   priorities" section are updated alongside the change that closes them (T-009, T-010).
 
 ## Task List
@@ -34,7 +34,7 @@ type, `InventoryOptimizer.config`).
 | T-006 | Implement `cli.py::_cmd_scenarios` for real: `--request`, `--scenario` (one `Scenario` or a JSON array), `--config`, `--output`; exit code distinguishes all-feasible / some-infeasible / invalid-input. | REQ-010 | done | Loads the baseline request and scenario(s) from JSON, but keeps the scenario-modified request in-process (never re-serialized) before calling `optimizer.optimize()` — see NFR-003. |
 | T-007 | Add `scenarios/runner.py::run_stress_test` and `domain/scenario_results.py::StressScenarioOutcome`/`StressTestReport`. | REQ-011 | done | Library function only this pass — no CLI subcommand (`plan.md`'s Open Questions). |
 | T-008 | Tests: `tests/unit/test_scenarios_apply.py`, `test_scenarios_runner.py`, `tests/golden/test_e2_rate_shock_scenario.py`, `test_e3_sale_and_recall_scenario.py`; extend `tests/unit/test_services.py`, `test_cli.py`. Cover AC-001 through AC-010. | REQ-001 through REQ-011 | done | See Test Coverage Map below. |
-| T-009 | Update `specs/spec002/TRACEABILITY.md`: `SCN-001`, `SCN-002`, `SCN-003` rows `SPECIFIED` → `IMPLEMENTED` with evidence pointers to T-008's tests. `SCN-004` stays `SPECIFIED` (tagged `T40`). | REQ-001 through REQ-011 | done | |
+| T-009 | Update `specs/engine_spec/TRACEABILITY.md`: `SCN-001`, `SCN-002`, `SCN-003` rows `SPECIFIED` → `IMPLEMENTED` with evidence pointers to T-008's tests. `SCN-004` stays `SPECIFIED` (tagged `T40`). | REQ-001 through REQ-011 | done | |
 | T-010 | Update `docs/handoff.md`: mark T13-T14 done with a pointer to this spec; identify the next task (Phase 3, MIP business rules, per `00_PLAN.md`). | REQ-001 through REQ-011 | done | |
 
 Status values: `todo` | `in-progress` | `blocked` | `done`.

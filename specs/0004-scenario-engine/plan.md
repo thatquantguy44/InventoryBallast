@@ -319,7 +319,7 @@ Additive library + CLI surface; nothing else depends on `scenarios/` yet. No fea
 staged rollout. Rollback is a plain revert of `scenarios/`, `domain/scenarios.py`,
 `domain/scenario_results.py`, and the `services.py`/`cli.py`/`domain/enums.py`/`exceptions.py`
 diffs — all additive, no existing behavior changes. Observability is `ScenarioComparison.warnings`
-plus the test suite; `specs/spec002/TRACEABILITY.md`'s `SCN-001`-`SCN-003` rows and
+plus the test suite; `specs/engine_spec/TRACEABILITY.md`'s `SCN-001`-`SCN-003` rows and
 `docs/handoff.md` are updated once implemented (tracked as T-009/T-010).
 
 ## Open Questions

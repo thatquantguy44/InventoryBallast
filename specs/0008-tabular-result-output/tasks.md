@@ -24,7 +24,7 @@ repaired.
   `optimize`/`scenarios` output, exit codes, or the `OptimizationResult` contract.
 - `pandas` stays optional: the default test run and the whole CSV path work with the extra absent
   (NFR-001), which is the current `.venv`'s actual state.
-- `specs/spec002/TRACEABILITY.md`'s `ARC-004` row and `docs/handoff.md` are updated alongside the
+- `specs/engine_spec/TRACEABILITY.md`'s `ARC-004` row and `docs/handoff.md` are updated alongside the
   change that touches them (T-010, T-011).
 
 ## Task List
@@ -40,7 +40,7 @@ repaired.
 | T-007 | Add `tests/unit/test_architecture_boundaries.py`: `adapters/*` imports no disallowed layer, and `pandas` appears only in `adapters/dataframe.py`. | REQ-007, REQ-011, NFR-004 | done | Self-contained `ast` walk; deliberately not reusing `scripts/verify_portability.py` (see `plan.md`). |
 | T-008 | Tests: `tests/unit/reporting/test_tables.py`, `tests/unit/adapters/test_csv_io.py`, `tests/unit/adapters/test_dataframe.py`, and `tests/unit/test_cli.py` additions. Confirm all pre-existing tests still pass (AC-010). | REQ-001 through REQ-010, NFR-001 through NFR-003 | done | See Test Coverage Map below. |
 | T-009 | Document the emitted table/column contract for consumers (README or `docs/`), pointing at `plan.md`'s catalogue as the normative list. | NFR-003 | done | Small: the contract exists to be depended on, so it needs a discoverable home outside the spec directory. |
-| T-010 | Update `specs/spec002/TRACEABILITY.md`'s `ARC-004` row: add the adapters-layer boundary test as evidence; status stays `SPECIFIED` with a note that full closure needs boundary tests for every layer pair. | REQ-011 | done | Mirrors the partial-evidence honesty pattern already used for `LP-008`/`PLT-002`/`VER-005`. |
+| T-010 | Update `specs/engine_spec/TRACEABILITY.md`'s `ARC-004` row: add the adapters-layer boundary test as evidence; status stays `SPECIFIED` with a note that full closure needs boundary tests for every layer pair. | REQ-011 | done | Mirrors the partial-evidence honesty pattern already used for `LP-008`/`PLT-002`/`VER-005`. |
 | T-011 | Update `docs/handoff.md` and `specs/README.md`: record this spec, the new `adapters/` layer, and the fact that the `dataframe` extra now has a real consumer. | REQ-005, REQ-006 | done | Also correct the Environment block, which currently implies `pandas` is installed in the `.venv` when it is not. |
 | T-012 | Fix `domain/results.py`: `ConstraintActivity.lower`/`.upper` and `VerificationSection`'s four violation fields gain `BeforeValidator`-based type aliases mapping JSON `null` back to `-inf`/`+inf`. | REQ-008 | done | Not in the original scope -- discovered while building T-006: `OptimizationResult` could not round-trip its own JSON, so `tables --input result.json` failed on real output. Emitted JSON unchanged; only reading is repaired. See Status note above and `spec.md`/`plan.md`. |
 

@@ -232,7 +232,7 @@ No new public parameter on `optimize()`; fully automatic, matching `spec.md`'s G
 Additive modules plus one new domain field and one behavior change (`compile_lp`'s rejection,
 deliberate and documented). Rollback is a revert of the new files, the `UtilizationPolicy` field,
 and the `lp.py`/`facade.py` diffs. Observability is the rejection's per-field `ValidationIssue`
-list and the test suite; `specs/spec002/TRACEABILITY.md`'s `LP-009` row gains an evidence pointer
+list and the test suite; `specs/engine_spec/TRACEABILITY.md`'s `LP-009` row gains an evidence pointer
 for the MIP portion (done — see the Task List's traceability-update task).
 
 ## Open Questions

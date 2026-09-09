@@ -10,7 +10,7 @@
 
 ## Problem & Context
 
-`specs/spec002/01_SPEC.md` §18 defines the full `OptimizationResult` reporting
+`specs/engine_spec/01_SPEC.md` §18 defines the full `OptimizationResult` reporting
 layer: identity/status, allocations, balances, economics, demand, schedules,
 collateral, desk, sources, constraints, solver diagnostics, verification,
 warnings, and platform references (§18.1); per-component objective attribution
@@ -32,7 +32,7 @@ recomputes. The `ReasonCode` enum (all 24 codes from §18.3) already exists in
 `domain/enums.py` — this spec derives *which* codes apply per route, not the
 vocabulary itself.
 
-`specs/spec002/TRACEABILITY.md` carries six rows against this gap, all
+`specs/engine_spec/TRACEABILITY.md` carries six rows against this gap, all
 `SPECIFIED` not `IMPLEMENTED`: `LP-007`, `LP-008`, `VER-001` (partially —
 T10 covers the independent-check half only), `VER-002`, `VER-005`, `VER-006`.
 `docs/handoff.md` names this as the concrete next task (T11) and the first
@@ -61,7 +61,7 @@ acted on.
   verification passes, labeled with objective scale and sign convention, and
   never surfaced for MIP results (§18.4).
 - Close `LP-007`, `VER-001`, `VER-002`, `VER-005`, `VER-006` in
-  `specs/spec002/TRACEABILITY.md` from `SPECIFIED` to `IMPLEMENTED`. `LP-008` stays
+  `specs/engine_spec/TRACEABILITY.md` from `SPECIFIED` to `IMPLEMENTED`. `LP-008` stays
   `SPECIFIED` — it requires the joint collateral mode (T32, not started); this spec
   only supplies the reconciliation pattern (`attribute_objective`) T32 will extend
   to a collateral/reinvestment term, so marking it `IMPLEMENTED` here would be a
@@ -120,7 +120,7 @@ acted on.
 | AC-007 | Given a route with no material allocation delta, when explanations are derived, then no reason codes are attached (explanations are only produced for material changes, not every route). | REQ-004 |
 | AC-008 | Given a solved continuous-LP golden fixture with `SolverResult.dual` populated and verification passed, when shadow prices are built, then every binding row has a labeled dual value traceable via `RowIndex` to its domain constraint. | REQ-005 |
 | AC-009 | Given a solved fixture with integer variables present (`SolverResult.dual is None`), when shadow prices are built, then the result's shadow-price section is empty/`None`, never a stale or fabricated value. | REQ-006 |
-| AC-010 | Given AC-001 through AC-009 pass, when `specs/spec002/TRACEABILITY.md` is updated, then `LP-007`, `VER-001`, `VER-002`, `VER-005`, `VER-006` read `IMPLEMENTED` (`LP-008` stays `SPECIFIED`, pending T32) with an evidence pointer to the tests above. | REQ-001-REQ-006 |
+| AC-010 | Given AC-001 through AC-009 pass, when `specs/engine_spec/TRACEABILITY.md` is updated, then `LP-007`, `VER-001`, `VER-002`, `VER-005`, `VER-006` read `IMPLEMENTED` (`LP-008` stays `SPECIFIED`, pending T32) with an evidence pointer to the tests above. | REQ-001-REQ-006 |
 
 ## Data & Dependencies
 

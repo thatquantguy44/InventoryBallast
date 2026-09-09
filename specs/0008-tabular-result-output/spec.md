@@ -10,7 +10,7 @@
 
 ## Problem & Context
 
-`specs/spec002/01_SPEC.md` §7 names two surfaces this repo has never built:
+`specs/engine_spec/01_SPEC.md` §7 names two surfaces this repo has never built:
 
 - **`reporting/tables.py`** — the §7 package tree lists it alongside the already-built
   `attribution.py`/`serialization.py` siblings, and §7.1 makes `reporting` own "Tables,
@@ -158,7 +158,7 @@ and stays out of scope (see Non-Goals).
 - `pyproject.toml`'s existing `dataframe` extra — first actual consumer.
 - `cli.py`'s subparser/dispatch/exit-code conventions (T12) — extended by REQ-008, unchanged
   otherwise.
-- `specs/spec002/TRACEABILITY.md`'s `ARC-004` row — gains partial evidence (adapters-layer boundary
+- `specs/engine_spec/TRACEABILITY.md`'s `ARC-004` row — gains partial evidence (adapters-layer boundary
   test); stays `SPECIFIED` pending the full layer matrix.
 
 ## Risks

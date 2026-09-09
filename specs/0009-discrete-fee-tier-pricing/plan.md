@@ -252,7 +252,7 @@ Expected values are recomputed in the tests from these formulas, never pasted fr
 Additive throughout except two guarded lines (`demand_cap`'s skip, `needs_mip`'s clause), both
 inert without tiers. Rollback is deleting the new components/field/section and reverting those two
 lines. Observability is `PricingSelection` in every result plus the attribution's own pricing line.
-`specs/spec002/TRACEABILITY.md`'s `LP-004` gains discrete-pricing evidence and `LP-009` gains the
+`specs/engine_spec/TRACEABILITY.md`'s `LP-004` gains discrete-pricing evidence and `LP-009` gains the
 §12.4/§14.1-seventh-trigger portion; both notes stay honest about what remains (continuous
 nonlinear pricing, PWL interpolation, NLP backend).
 

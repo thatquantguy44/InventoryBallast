@@ -1,5 +1,5 @@
 """E1 end-to-end CLI test (T12; specs/0003-public-api-cli/; 01_SPEC.md's Section 26 Task Matrix
-names "end-to-end JSON test" as T12's own evidence; specs/spec002/TRACEABILITY.md's `PLT-002` row
+names "end-to-end JSON test" as T12's own evidence; specs/engine_spec/TRACEABILITY.md's `PLT-002` row
 names "end-to-end golden test" -- this is that evidence).
 
 Invokes the real *installed* ``inventory-optimizer`` console script via ``subprocess.run`` (after

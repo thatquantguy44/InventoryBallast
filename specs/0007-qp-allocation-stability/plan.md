@@ -263,7 +263,7 @@ Additive modules plus one new config section and one behavior change each in `co
 new files, the `ObjectiveConfig` section, and the `lp.py`/`mip.py`/`facade.py`/`solvers/highs.py`/
 `validation/solution_verifier.py` diffs. Observability is the rejection issues' structured codes,
 the attribution breakdown's `allocation_stability` entry (RISK-002), and the test suite;
-`specs/spec002/TRACEABILITY.md`'s `LP-009` row gains further evidence for the QP portion (PWL/NLP
+`specs/engine_spec/TRACEABILITY.md`'s `LP-009` row gains further evidence for the QP portion (PWL/NLP
 stay `SPECIFIED`).
 
 ## Open Questions

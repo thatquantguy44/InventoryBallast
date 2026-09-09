@@ -10,7 +10,7 @@
 
 ## Problem & Context
 
-`specs/spec002/01_SPEC.md` §14.2 ("Convex QP extensions") and `00_PLAN.md`'s Phase 4 ("QP and
+`specs/engine_spec/01_SPEC.md` §14.2 ("Convex QP extensions") and `00_PLAN.md`'s Phase 4 ("QP and
 advanced objective terms") define a family of convex quadratic objective terms the baseline
 continuous LP (T08) and MIP (T15) cannot represent: squared deviation from current allocations,
 borrower/security concentration penalties, covariance-weighted revenue/recall risk, and smooth
@@ -157,7 +157,7 @@ reports any regularization added." This spec's scaling pass is the concrete inst
 - `facade.InventoryOptimizer` (T12) — gains the auto-routing logic (REQ-005).
 - `formulation.compiler_support.resolve_component` (T15) — gains the formulation-membership check
   (REQ-010).
-- `specs/spec002/TRACEABILITY.md`'s `LP-009` row — this spec's evidence target, extending the MIP
+- `specs/engine_spec/TRACEABILITY.md`'s `LP-009` row — this spec's evidence target, extending the MIP
   portion `0006` already moved to `IMPLEMENTED` (PWL/NLP stay `SPECIFIED`).
 
 ## Risks

@@ -10,10 +10,10 @@
 
 ## Problem & Context
 
-`specs/spec002/01_SPEC.md` §13 defines trade and what-if scenarios: typed overlays (trade events,
+`specs/engine_spec/01_SPEC.md` §13 defines trade and what-if scenarios: typed overlays (trade events,
 rate/demand/inventory shocks, policy overrides, schedule overlays, collateral shocks, desk events)
 applied to an immutable clone of the baseline request, re-solved, and compared against the
-already-computed baseline result. `specs/spec002/ROADMAPS.md`'s release-gate table names this
+already-computed baseline result. `specs/engine_spec/ROADMAPS.md`'s release-gate table names this
 plainly: **R2 | Trade and shock scenarios | T13-T14 | R1 | Batch equals isolated solves; baseline
 stays immutable.** Nothing under `src/inventory_optimizer/` builds any of this yet — no
 `Scenario`/`TradeEvent` type exists, `services.ScenarioService` was deliberately left undefined by
@@ -23,14 +23,14 @@ prints a "not implemented" message.
 §13's full model is much larger than what this repo can honestly build today: `schedule_overlays`
 need the eligibility-schedule compiler (T29, not started), `collateral_shocks` need the collateral
 mode (T30-T32, not started), and `desk_events` need the agency/prime desk profiles (T35-T39, not
-started) — `specs/spec002/TRACEABILITY.md`'s own `SCN-004` row already tags desk events `T40`, not
+started) — `specs/engine_spec/TRACEABILITY.md`'s own `SCN-004` row already tags desk events `T40`, not
 `T13-T14`. This spec builds the slice that R2's own exit gate actually requires and that today's
 domain contracts already support: typed trade events (§13.1's seven types, in full), rate and
 demand shocks, the overlay/compare/batch pipeline, and `ScenarioComparison` reporting — deferring
 everything that needs an unbuilt subsystem, the same way T11 deferred 21 of 24 reason codes and
 T12 deferred `ScenarioService`'s definition until now.
 
-Two worked examples ground this spec, both already in `specs/spec002/EXAMPLES.md`:
+Two worked examples ground this spec, both already in `specs/engine_spec/EXAMPLES.md`:
 
 - **E2 (Fee Elasticity Shock)** is, on inspection, a `RateShock` scenario: "the baseline
   request/hash is unchanged after the scenario" and "batch and isolated scenario results agree
@@ -53,7 +53,7 @@ Two worked examples ground this spec, both already in `specs/spec002/EXAMPLES.md
 capability — running a batch of (typically adverse) scenarios and summarizing worst-case
 degradation in one report, built as a thin layer over the same batch-execution machinery `SCN-003`
 already requires. This is not part of `01_SPEC.md`'s normative text, so it gets no
-`specs/spec002/TRACEABILITY.md` row of its own (that document stays faithful to the copied
+`specs/engine_spec/TRACEABILITY.md` row of its own (that document stays faithful to the copied
 upstream spec) — it is tracked only by this spec's own `REQ-*`/`AC-*` IDs.
 
 ## Goals
@@ -155,8 +155,8 @@ upstream spec) — it is tracked only by this spec's own `REQ-*`/`AC-*` IDs.
 - `reporting.explanations`, `components.objective_terms.fee_revenue.fee_revenue_coefficient` —
   reused, not re-implemented, for `ELASTICITY_REDUCED_DEMAND` (automatic, no code change) and the
   per-route revenue-delta estimate for `TRADE_REDUCED_SUPPLY`-tagged routes respectively.
-- `specs/spec002/EXAMPLES.md` E2, E3 — golden fixtures for AC-001 through AC-004.
-- `specs/spec002/TRACEABILITY.md`'s `SCN-001`, `SCN-002`, `SCN-003` rows — this spec's evidence
+- `specs/engine_spec/EXAMPLES.md` E2, E3 — golden fixtures for AC-001 through AC-004.
+- `specs/engine_spec/TRACEABILITY.md`'s `SCN-001`, `SCN-002`, `SCN-003` rows — this spec's evidence
   target. `SCN-004` stays `SPECIFIED` (tagged `T40`, agency/prime desk events, out of scope here).
 
 ## Risks

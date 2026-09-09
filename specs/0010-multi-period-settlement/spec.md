@@ -188,7 +188,7 @@ route's own contractual minimum) is rejected, not silently honored.
 - `domain.requests.OptimizationRequest` — gains the two optional fields (REQ-001).
 - `domain.results.OptimizationResult` — untouched (REQ-008's result type is separate).
 - New config: `config.models.MultiPeriodConfig.daily_discount_rate`, defaulting to `0.0`.
-- `specs/spec002/TRACEABILITY.md` — no existing row covers §22.11/§22.12; `plan.md`/`tasks.md`
+- `specs/engine_spec/TRACEABILITY.md` — no existing row covers §22.11/§22.12; `plan.md`/`tasks.md`
   propose new `MPS-*` rows.
 
 ## Risks

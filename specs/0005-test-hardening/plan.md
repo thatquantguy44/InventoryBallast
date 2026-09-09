@@ -205,7 +205,7 @@ accidental O(n^2) construction) without being sensitive to normal machine-to-mac
 | REQ-011 | `tests/golden/test_existing_loan_churn.py` | T-004 |
 | REQ-012 | `tests/golden/test_utilization_floor_exceeds_cap.py` | T-005 |
 | REQ-013 | `tests/benchmark/test_core_desk_scale.py` | T-006 |
-| REQ-014 | `specs/spec002/TRACEABILITY.md`'s `DOM-002`/`LP-002` rows | T-007 |
+| REQ-014 | `specs/engine_spec/TRACEABILITY.md`'s `DOM-002`/`LP-002` rows | T-007 |
 | NFR-001 | `max_examples` bounded per test (20-25) | T-001 |
 | NFR-002 | Explicit `assume()`/margin guards documented above per property | T-001 |
 | NFR-003 | `slow` pytest marker on the benchmark test | T-006 |

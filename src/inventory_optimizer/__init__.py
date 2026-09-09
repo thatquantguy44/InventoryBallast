@@ -1,6 +1,6 @@
-"""Portable securities-lending inventory optimization engine (Spec002).
+"""Portable securities-lending inventory optimization engine (Engine Spec).
 
-This package must never import ``qr_haven``. See ``specs/spec002/`` in this
+This package must never import ``qr_haven``. See ``specs/engine_spec/`` in this
 repository for the normative specification.
 """
 
