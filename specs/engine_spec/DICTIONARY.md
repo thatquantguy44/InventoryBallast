@@ -1,9 +1,9 @@
-# Spec002 Canonical Dictionary
+# Engine Spec Canonical Dictionary
 
 ## Purpose
 
 This dictionary is the terminology and notation authority for the inventory-optimization project.
-Code, configuration, APIs, reports, tests, and other Spec002 documents should use these definitions.
+Code, configuration, APIs, reports, tests, and other Engine Spec documents should use these definitions.
 When an upstream system uses a conflicting term, its adapter must map that term explicitly rather
 than changing this dictionary implicitly.
 

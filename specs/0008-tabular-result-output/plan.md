@@ -319,7 +319,7 @@ subcommand, plus one small, backward-compatible fix to `domain/results.py` (T-01
 during implementation — see below). No existing module's *behavior* changes and no emitted byte
 changes anywhere, so rollback is deleting the new files, the `cli.py` parser/dispatch entries, and
 reverting the two `BeforeValidator` type aliases. Observability is the CLI's written-file listing
-plus the test suite. `specs/spec002/TRACEABILITY.md`'s `ARC-004` row gains partial evidence (the
+plus the test suite. `specs/engine_spec/TRACEABILITY.md`'s `ARC-004` row gains partial evidence (the
 adapters-layer boundary test) and stays `SPECIFIED` pending the full layer matrix.
 
 **Deviation from approved scope, recorded per the constitution's "no silent trade-offs":**

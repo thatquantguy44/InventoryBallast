@@ -12,14 +12,14 @@
 
 ## Problem & Context
 
-`specs/spec002/01_SPEC.md` §17 defines the public surface every caller of this engine (a script, a
+`specs/engine_spec/01_SPEC.md` §17 defines the public surface every caller of this engine (a script, a
 notebook, a future platform adapter) is meant to use instead of reaching into `formulation/`,
 `solvers/`, or `validation/` directly: a stable facade (§17.1, `InventoryOptimizer` + `load_config`),
 three service protocols (§17.2), and a CLI (§17.3). §17.4 (the QR Haven platform adapter,
 `src/qr_haven/integrations/inventory_optimizer.py`) and most of §17.5 (the platform-owned half of
 the invocation contract — authentication, persistence, idempotency-key *enforcement*, result
 caching, cancellation cooperation) are out of scope: `docs/handoff.md`'s T12 entry already
-scopes them out ("the adapter itself lives in `QR-Haven`, not here"), and `specs/spec002/
+scopes them out ("the adapter itself lives in `QR-Haven`, not here"), and `specs/engine_spec/
 TRACEABILITY.md`'s `PLT-001`/`PLT-005`/`PLT-006` rows tag `T17`/`T34`, not `T12`, as their owning
 tasks. `01_SPEC.md`'s own Task Matrix (§26) confirms the boundary directly: `T12 | Implement public
 API and CLI | T02, T11 | end-to-end JSON test` — it depends only on T02 (config) and T11 (result/
@@ -87,7 +87,7 @@ above) and is a precondition for moving this spec's Status past `Draft`.
   `build_optimization_result` deliberately left as caller-supplied keyword arguments so that
   function itself could stay pure (T11's own design choice) — deterministically and without
   duplicating `config.hashing.canonical_json`'s hashing logic.
-- Supply the evidence `specs/spec002/TRACEABILITY.md`'s `PLT-002` row names for the `T01`-`T12`
+- Supply the evidence `specs/engine_spec/TRACEABILITY.md`'s `PLT-002` row names for the `T01`-`T12`
   span it depends on ("component manifest" / "end-to-end golden test") — without unilaterally
   marking `PLT-002` `IMPLEMENTED` in this draft, since that row's gate (`G2C`) is a release
   approval this spec does not grant itself.
@@ -203,7 +203,7 @@ above) and is a precondition for moving this spec's Status past `Draft`.
   through opaquely; never constructed or inspected beyond pass-through.
 - `components.registry.default_registry`/`ComponentKind` (T05) — read by the `components` CLI
   subcommand and by backend resolution.
-- `specs/spec002/TRACEABILITY.md`'s `PLT-002` row (`T01`-`T12` / `R1` / `G2C`) is the primary row
+- `specs/engine_spec/TRACEABILITY.md`'s `PLT-002` row (`T01`-`T12` / `R1` / `G2C`) is the primary row
   this spec's evidence feeds; `ARC-001`/`PLT-001`/`PLT-005`/`PLT-006`/`CFG-004` are tagged `T17`/
   `T34`/`T35` and are **not** rows this spec closes (see Non-Goals).
 - `tests/golden/`, `tests/conftest.py`'s `e1_request`/`default_config` fixtures — reused rather than

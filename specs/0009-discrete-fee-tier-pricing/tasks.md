@@ -26,7 +26,7 @@ resume there.**
 - Every existing test continues to pass unchanged (NFR-001), and an untiered request compiles to
   byte-identical variable/row indexes — the same guarantee `0006` held for `z`/`n`.
 - The compiled problem stays a **linear** MIP (NFR-002): no bilinear term ever reaches the solver.
-- `specs/spec002/TRACEABILITY.md` (`LP-004`, `LP-009`) and `docs/handoff.md` are updated alongside
+- `specs/engine_spec/TRACEABILITY.md` (`LP-004`, `LP-009`) and `docs/handoff.md` are updated alongside
   the change that closes them (T-009, T-010).
 
 ## Task List
@@ -41,7 +41,7 @@ resume there.**
 | T-006 | Add `domain/results.py::PricingSelection` and the defaulted `OptimizationResult.pricing` section; populate it in `reporting/result_builder.py`. | REQ-007 | done | Additive and defaulted, so existing results/tests are unaffected. `reference_fee_rate` mirrors `_compute_demand_caps`'s own incumbent-fee fallback (group's shared route fee, else the forecast's own reference). |
 | T-007 | Add a `slow`-marked scale test sizing the `J*K` variable growth. | REQ-003 | done | `tests/benchmark/test_fee_tier_scale.py`: 20 tiered groups × 10 routes × 10 tiers (2,000 `w` + 200 `t` variables); compiles, solves, and verifies in well under the 60s generous ceiling. |
 | T-008 | Tests: `tests/golden/test_fee_tier_pricing.py`, `tests/unit/test_fee_tier_compiler.py`, and `tests/unit/test_domain_contracts.py` additions. Confirm all pre-existing tests still pass (AC-009). | REQ-001 through REQ-010, NFR-001 through NFR-004 | done | 19 new tests (239 total, zero regressions in the pre-existing 220). See the updated Test Coverage Map below for exact names — several ACs ended up split across more than one test than originally sketched (e.g. AC-007's three independent validator cases, AC-008's parametrized route/group-id case) for clarity, not scope creep. |
-| T-009 | Update `specs/spec002/TRACEABILITY.md`: `LP-004` gains discrete-pricing evidence; `LP-009` gains the §12.4 / §14.1-seventh-trigger portion, with continuous nonlinear pricing and PWL interpolation explicitly still `SPECIFIED`. | REQ-001 through REQ-010 | todo | Mirrors the partial-status honesty already used for `LP-008`/`PLT-002`/`VER-005`. Do this only after T-008's tests actually pass — evidence pointers must cite real, passing tests. |
+| T-009 | Update `specs/engine_spec/TRACEABILITY.md`: `LP-004` gains discrete-pricing evidence; `LP-009` gains the §12.4 / §14.1-seventh-trigger portion, with continuous nonlinear pricing and PWL interpolation explicitly still `SPECIFIED`. | REQ-001 through REQ-010 | todo | Mirrors the partial-status honesty already used for `LP-008`/`PLT-002`/`VER-005`. Do this only after T-008's tests actually pass — evidence pointers must cite real, passing tests. |
 | T-010 | Update `docs/handoff.md` and `specs/README.md`: record this spec, note that Phase 3's deferred rate-ladder item and §14.1's seventh MIP trigger are closed by it, and restate what Phase 5 still leaves open (continuous NLP, multi-period). | REQ-001 through REQ-010 | todo | Phase 5 is *not* complete when this ships — only its item 1, in discrete form. Last task; do after T-007/T-008/T-009. |
 
 Status values: `todo` | `in-progress` | `blocked` | `done`.

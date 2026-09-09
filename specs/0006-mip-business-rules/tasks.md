@@ -16,7 +16,7 @@
 - No secrets, credentials, or private data introduced.
 - Every existing test continues to pass unchanged (NFR-001) — this is the one spec in this repo
   so far whose core requirement is *not* breaking anything already implemented.
-- `specs/spec002/TRACEABILITY.md`'s `LP-009` row and `docs/handoff.md`'s "Next priorities" section
+- `specs/engine_spec/TRACEABILITY.md`'s `LP-009` row and `docs/handoff.md`'s "Next priorities" section
   are updated alongside the change that closes them (T-008, T-009).
 
 ## Task List
@@ -30,7 +30,7 @@
 | T-005 | Update `formulation/lp.py::compile_lp`: import `resolve_component`/`set_route_bounds` from `compiler_support` (remove the local private copies); raise via `needs_mip`/`mip_required_issues` before compiling. | REQ-006 | done | The one deliberate behavior change in this spec (RISK-001) — every other line of `compile_lp` is unchanged. |
 | T-006 | Update `facade.py::InventoryOptimizer.optimize`: route to `compile_mip` when `needs_mip(request)`, else `compile_lp`. | REQ-007 | done | No new public parameter. |
 | T-007 | Tests: `tests/golden/test_mip_business_rules.py` (AC-001 through AC-004, AC-008, AC-009); `tests/unit/test_mip_compiler.py` (AC-006, `compile_mip` row/variable shape per trigger, `needs_mip`). Confirm all pre-existing tests still pass (AC-005). | REQ-001 through REQ-009, NFR-001, NFR-003 | done | See Test Coverage Map below. |
-| T-008 | Update `specs/spec002/TRACEABILITY.md`'s `LP-009` row: evidence pointer to this spec's tests; status becomes `IMPLEMENTED` for the MIP portion only (QP/PWL/NLP explicitly still `SPECIFIED`, tagged `T18` and later). | REQ-001 through REQ-009 | done | Mirrors T11/T12's own partial-implementation honesty precedent (`LP-008`, `PLT-002`). |
+| T-008 | Update `specs/engine_spec/TRACEABILITY.md`'s `LP-009` row: evidence pointer to this spec's tests; status becomes `IMPLEMENTED` for the MIP portion only (QP/PWL/NLP explicitly still `SPECIFIED`, tagged `T18` and later). | REQ-001 through REQ-009 | done | Mirrors T11/T12's own partial-implementation honesty precedent (`LP-008`, `PLT-002`). |
 | T-009 | Update `docs/handoff.md`: mark Phase 3 (this spec) done; identify the next task (Phase 4, QP, per `00_PLAN.md`). | REQ-001 through REQ-009 | done | |
 
 Status values: `todo` | `in-progress` | `blocked` | `done`.

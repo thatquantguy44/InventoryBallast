@@ -20,14 +20,14 @@ agentic scaffold (`instructions/`, `hooks/`, `agents/`, `prompts/`, `templates/`
 guidance lives in the QuantSmith repo itself (not copied here — see "Open items"
 below).
 
-## The actual spec: `specs/spec002/`
+## The actual spec: `specs/engine_spec/`
 
-The engine's normative specification is [`specs/spec002/`](../specs/spec002/) —
+The engine's normative specification is [`specs/engine_spec/`](../specs/engine_spec/) —
 copied over from `QR-Haven` in the same extraction (it was **not** carried by the
 `git subtree split`, since it lived outside `projects/inventory_optimizer/` in the
 monorepo; it was copied separately and is new, uncommitted-by-QuantSmith content
 specific to this engine, not the QuantSmith reference spec). Read in this order,
-per `specs/spec002/00_PLAN.md`'s own "Handoff Order":
+per `specs/engine_spec/00_PLAN.md`'s own "Handoff Order":
 
 1. `01_SPEC.md` §4 — boundaries and vocabulary
 2. `01_SPEC.md` §7 — target project structure
@@ -46,7 +46,7 @@ scope.
 
 ## Current state (verified 2026-09-07)
 
-Per `specs/spec002/00_PLAN.md`'s status line and `TRACEABILITY.md`:
+Per `specs/engine_spec/00_PLAN.md`'s status line and `TRACEABILITY.md`:
 
 - **Implemented and tested:** T01-T18, T34, and the `securities_lending_inventory`
   baseline of T35 — package scaffold, domain contracts, config, elasticity
@@ -124,7 +124,7 @@ their owning constraint components — see the spec's tasks.md Follow-ups); and
 LP shadow prices (`reporting.shadow_prices.build_shadow_prices`), correctly
 omitted whenever the backend reports no dual (MIP solves).
 
-`specs/spec002/TRACEABILITY.md` rows `LP-007`, `VER-001`, `VER-002`,
+`specs/engine_spec/TRACEABILITY.md` rows `LP-007`, `VER-001`, `VER-002`,
 `VER-005`, `VER-006` moved `SPECIFIED` → `IMPLEMENTED`. `LP-008` was
 **not** closed — the original spec draft incorrectly listed it; it needs the
 joint collateral mode (T32, not started), not just T11, and was corrected in
@@ -156,7 +156,7 @@ genuinely non-deterministic run-to-run (wall-clock solve time), which
 corrected `spec.md`'s determinism claims (`NFR-001`/`NFR-004`/`AC-002`/`AC-011`)
 rather than the code.
 
-`specs/spec002/TRACEABILITY.md`'s `PLT-002` row gained an evidence pointer to
+`specs/engine_spec/TRACEABILITY.md`'s `PLT-002` row gained an evidence pointer to
 `tests/golden/test_e1_cli_end_to_end.py` but stays `SPECIFIED` — its `G2C`
 gate is a cross-cutting platform-ownership release approval shared with
 `PLT-001`, `PLT-003`-`PLT-006` (all T17/T34-owned, none of which this repo
@@ -179,7 +179,7 @@ E3 **exactly**, with zero changes to `reporting/`, `formulation/`, or
 `validation/`.
 
 **Basic stress testing** (added at the owner's request, beyond `01_SPEC.md`
-§13's own text, so it carries no `specs/spec002/TRACEABILITY.md` row of its
+§13's own text, so it carries no `specs/engine_spec/TRACEABILITY.md` row of its
 own): `scenarios.runner.run_stress_test(baseline_request, baseline_result,
 scenarios, optimizer) -> StressTestReport` runs a batch of (typically
 adverse) scenarios and summarizes worst-case degradation in one report —
@@ -197,7 +197,7 @@ pending recall" book state (E3's own setup) without a `SecurityInventory`
 domain-model change; `ScenarioComparison.warnings` surfaces that state
 explicitly rather than hiding it. (2) `schedule_overlays`, `collateral_shocks`,
 `desk_events`, `InventoryShock`, and `PolicyOverride` are all deliberately
-**not** implemented — `specs/spec002/TRACEABILITY.md`'s `SCN-004` row stays
+**not** implemented — `specs/engine_spec/TRACEABILITY.md`'s `SCN-004` row stays
 `SPECIFIED` (tagged `T40`); the rest wait on T29/T30-T32/T35-T39 or a real
 worked example to pin their shape down.
 
@@ -220,7 +220,7 @@ subsections found five real, closeable gaps, all now closed (all eight
 - **`InventoryBalanceConstraint`/`TransitionIdentityConstraint`** had no
   dedicated, isolated unit test (only indirect golden-solve coverage) —
   `tests/unit/test_lp_compiler.py` gained one each, strengthening
-  `specs/spec002/TRACEABILITY.md`'s `LP-002` evidence.
+  `specs/engine_spec/TRACEABILITY.md`'s `LP-002` evidence.
 - **§24.5's existing-loan-churn case** (1.00% current route vs. a 1.10%
   candidate, transition-cost-gated) reproduced in
   `tests/golden/test_existing_loan_churn.py`.
@@ -264,7 +264,7 @@ needed any change: T09's `HighsBackend` already handled integer variables and
 suppressed duals for them, T10's `validation.solution_verifier` already
 checked integrality against whatever array it was given, and T11's
 attribution/explanation logic operates purely on primal values and domain
-fields. `specs/spec002/TRACEABILITY.md`'s `LP-009` row moved `SPECIFIED` →
+fields. `specs/engine_spec/TRACEABILITY.md`'s `LP-009` row moved `SPECIFIED` →
 `IMPLEMENTED` for the MIP portion specifically (QP/PWL/NLP — §14.2-14.4 —
 remain `SPECIFIED`, tagged T18 and later). 19 new tests
 (`tests/golden/test_mip_business_rules.py`,
@@ -313,7 +313,7 @@ While adding the new QP-only objective component, `formulation/
 compiler_support.py::resolve_component` gained a formulation-membership
 check — Section 15.1 says components "declare formulations" but nothing
 enforced it before this spec; verified purely additive (every existing
-component already declares its correct, complete scope). `specs/spec002/
+component already declares its correct, complete scope). `specs/engine_spec/
 TRACEABILITY.md`'s `LP-009` row extends its `IMPLEMENTED` status to cover
 this QP term (PWL/NLP and QP's other three candidate terms stay `SPECIFIED`).
 21 new tests (`tests/golden/test_qp_allocation_stability.py`,
@@ -399,7 +399,7 @@ moment a cheaper tier is selected) — a single guarded line, inert for every un
 29 new tests (`tests/golden/test_fee_tier_pricing.py`, `tests/unit/test_fee_tier_compiler.py`,
 `tests/unit/test_domain_contracts.py` additions, `tests/benchmark/test_fee_tier_scale.py`
 `slow`-marked); 239 passed + 2 skipped (pandas absent), zero regressions in the pre-existing 220.
-`specs/spec002/TRACEABILITY.md`'s `LP-004` row gains discrete-per-candidate-fee evidence; `LP-009`
+`specs/engine_spec/TRACEABILITY.md`'s `LP-004` row gains discrete-per-candidate-fee evidence; `LP-009`
 extends its `IMPLEMENTED` status to cover Section 12.4's discrete price-selection MIP (PWL/NLP —
 Section 14.3-14.4's continuous-fee case — and QP's other three candidate terms stay `SPECIFIED`).
 
@@ -494,7 +494,7 @@ only reading is repaired, and a regression test pins it
 with zero usage until now) has its first real consumer; `pandas` is still not
 installed in this `.venv`, so its own tests skip cleanly via
 `pytest.importorskip` while the CSV path (which needs no extra) is fully
-exercised. `specs/spec002/TRACEABILITY.md`'s `ARC-004` row gains partial
+exercised. `specs/engine_spec/TRACEABILITY.md`'s `ARC-004` row gains partial
 evidence (`tests/unit/test_architecture_boundaries.py` proves the `adapters`
 layer's own boundary; the full pairwise layer matrix stays a follow-up). 29
 new tests; 220 passed + 2 skipped (pandas absent), zero regressions in the
@@ -658,7 +658,7 @@ way `0009` did.
   Sonnet 5` trailers that earlier commits had; author/committer identity on
   every commit was already the repo owner's own, so only the trailers needed
   removing. Any agent committing here going forward must not add one.
-- **`specs/spec002/` cross-references:** the 6,500-line spec set was copied
+- **`specs/engine_spec/` cross-references:** the 6,500-line spec set was copied
   verbatim from `QR-Haven` and still describes some things in monorepo terms
   (e.g. "the parent repository", the `qr_haven` platform adapter living
   elsewhere) — that's accurate (the adapter genuinely stays in `QR-Haven`), but

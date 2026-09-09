@@ -13,7 +13,7 @@
 - Reproducibility preserved: no wall-clock, random, or I/O read inside pure
   `reporting/` functions (NFR-004).
 - No secrets, credentials, or private data introduced.
-- `specs/spec002/TRACEABILITY.md` and `docs/handoff.md` updated alongside the
+- `specs/engine_spec/TRACEABILITY.md` and `docs/handoff.md` updated alongside the
   change that closes them (T-010, T-011) — not deferred to a later commit.
 
 ## Task List
@@ -29,7 +29,7 @@
 | T-007 | Add `reporting/shadow_prices.py::build_shadow_prices(solution: VerifiedSolution) -> tuple[ShadowPriceEntry, ...]`: guard on `result.dual is None or not verification.passed` returning `()`; otherwise zip `row_index.keys` against `result.dual`, label with `CompiledProblem.scaling.objective_scale_usd` and a fixed sign-convention string. | REQ-005, REQ-006, NFR-003 | done | |
 | T-008 | Add `reporting/result_builder.py::build_optimization_result(solution: VerifiedSolution, *, run_id, created_at, config_hash, input_hash, platform=None) -> OptimizationResult`: orchestrate T-004/T-006/T-007 plus Allocations/Balances/Demand read directly from the request + primal. | REQ-003 | done | Identity fields this layer cannot compute itself (`run_id`, `created_at`, `config_hash`, `input_hash`, the platform envelope) are caller-supplied keyword args, keeping the function pure (NFR-004) — deviation from the original `(request, problem, result, verification)` sketch. |
 | T-009 | Unit tests: `tests/unit/reporting/test_attribution.py`, `test_explanations.py`, `test_shadow_prices.py`, `test_result_builder.py`, reusing the E1 fixture; add one seeded-mismatch fixture (an isolated `Registry` with a fake objective component) for `AttributionMismatchError`, and one pinned-route fixture for the immaterial-change negative case. | REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-006 | done | 10 new tests, all passing; 107/107 total (`pytest tests/ -q`). See Test Coverage Map below. |
-| T-010 | Update `specs/spec002/TRACEABILITY.md` rows `LP-007`, `VER-001`, `VER-002`, `VER-005`, `VER-006` from `SPECIFIED` to `IMPLEMENTED`, each pointing at the specific test(s) from T-009. | REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-006 | done | `LP-008` stays `SPECIFIED` (corrected from the original spec/plan, which wrongly listed it as closing here) — it needs the joint collateral mode, T32, not just T11; see `spec.md`'s Goals section. |
+| T-010 | Update `specs/engine_spec/TRACEABILITY.md` rows `LP-007`, `VER-001`, `VER-002`, `VER-005`, `VER-006` from `SPECIFIED` to `IMPLEMENTED`, each pointing at the specific test(s) from T-009. | REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-006 | done | `LP-008` stays `SPECIFIED` (corrected from the original spec/plan, which wrongly listed it as closing here) — it needs the joint collateral mode, T32, not just T11; see `spec.md`'s Goals section. |
 | T-011 | Update `docs/handoff.md`'s "Next priorities" section: mark T11 done with a pointer to this spec, promote T12 to the immediate next task. | REQ-003 | done | |
 
 Status values: `todo` | `in-progress` | `blocked` | `done`.
@@ -49,7 +49,7 @@ Every acceptance criterion must be named by at least one test.
 | AC-007 | `test_explanations.py::test_no_reason_codes_on_immaterial_change` (AC-007) | done |
 | AC-008 | `test_shadow_prices.py::test_binding_row_duals_labeled_and_traceable` (AC-008) | done |
 | AC-009 | `test_shadow_prices.py::test_mip_solve_has_no_shadow_prices` (AC-009) | done |
-| AC-010 | `specs/spec002/TRACEABILITY.md` diff reviewed against the unit-test names above (AC-010) | done |
+| AC-010 | `specs/engine_spec/TRACEABILITY.md` diff reviewed against the unit-test names above (AC-010) | done |
 
 ## Follow-ups
 

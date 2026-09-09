@@ -17,7 +17,7 @@ implemented, tested, and traced.
 - No secrets, credentials, or private data introduced.
 - Every existing test continues to pass unchanged (NFR-001) — this spec's core promise, same as
   `0006`'s before it.
-- `specs/spec002/TRACEABILITY.md`'s `LP-009` row and `docs/handoff.md`'s "Next priorities" section
+- `specs/engine_spec/TRACEABILITY.md`'s `LP-009` row and `docs/handoff.md`'s "Next priorities" section
   are updated alongside the change that closes them (T-010, T-011).
 
 ## Task List
@@ -33,7 +33,7 @@ implemented, tested, and traced.
 | T-007 | Update `solvers/highs.py`: `HighsBackend` gains `Capability.CONTINUOUS_QP`; `_build_highs_lp`/new `_build_highs_hessian` accept a scale factor read from `problem.scaling`; `solve()` divides the solved objective and duals back down by the same factor. | REQ-006, REQ-008 | done | Empirically confirmed against the pinned `highspy` version (see `plan.md`'s scaling account) before finalizing. |
 | T-008 | Update `validation/solution_verifier.py`: objective reconstruction includes the sense-signed quadratic term via `formulation.qp_support.signed_quadratic_term`. | REQ-007 | done | No other change; still compares against `objective_value_unscaled` exactly as before. |
 | T-009 | Tests: `tests/golden/test_qp_allocation_stability.py` (AC-001 through AC-003, AC-007, AC-008); `tests/unit/test_qp_compiler.py` (AC-004, AC-005, `compile_qp` row/scaling shape, `needs_qp`); `tests/unit/test_qp_support.py` (AC-006); `tests/benchmark/test_qp_scale.py` (AC-010, `slow`-marked). Confirm all pre-existing tests still pass (AC-009). | REQ-001 through REQ-010, NFR-001 through NFR-003 | done | See Test Coverage Map below. |
-| T-010 | Update `specs/spec002/TRACEABILITY.md`'s `LP-009` row: extend the evidence pointer to this spec's tests; note remains `IMPLEMENTED` (MIP + QP allocation-stability portions; PWL/NLP explicitly still `SPECIFIED`, tagged `T18` and later). | REQ-001 through REQ-010 | done | Extends, not replaces, `0006`'s own evidence entry. |
+| T-010 | Update `specs/engine_spec/TRACEABILITY.md`'s `LP-009` row: extend the evidence pointer to this spec's tests; note remains `IMPLEMENTED` (MIP + QP allocation-stability portions; PWL/NLP explicitly still `SPECIFIED`, tagged `T18` and later). | REQ-001 through REQ-010 | done | Extends, not replaces, `0006`'s own evidence entry. |
 | T-011 | Update `docs/handoff.md`: mark Phase 4 (this spec) done; identify the next task (Phase 5, nonlinear/multi-period research, per `00_PLAN.md`). | REQ-001 through REQ-010 | done | |
 
 Status values: `todo` | `in-progress` | `blocked` | `done`.

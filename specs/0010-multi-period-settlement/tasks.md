@@ -28,7 +28,7 @@ joint multi-period LP) is `todo` — resume there.**
 - Phase 2 introduces no compiler change to `formulation/lp.py`, `formulation/mip.py`, or
   `formulation/qp.py` themselves — only a new, separate compiler plus one new `facade.py` branch
   and one new `compiler_support.py` predicate pair.
-- `specs/spec002/TRACEABILITY.md` (new `MPS-001`/`MPS-002`/`MPS-003` rows) and `docs/handoff.md`
+- `specs/engine_spec/TRACEABILITY.md` (new `MPS-001`/`MPS-002`/`MPS-003` rows) and `docs/handoff.md`
   are updated alongside the change that closes them (T-013, T-014).
 
 ## Task List
@@ -47,7 +47,7 @@ joint multi-period LP) is `todo` — resume there.**
 | T-010 | Add `formulation/multi_period.py::compile_multi_period_lp` tying T-007 through T-009 together, plus `solve_multi_period` (the new, separate entry point: validate + compile + solve + verify + `mode="jointly_optimized"` result construction, reusing `domain/settlement.py` from T-005). | REQ-009 through REQ-012 | todo | No changes to `solvers/highs.py`, `validation/solution_verifier.py`, or `facade.py` — the `CompiledProblem` shape is structurally an ordinary LP, and `solve_multi_period` composes the same stages `optimize()` does without touching it. |
 | T-011 | Phase 2 tests: `tests/golden/test_multi_period_lp.py`, `tests/unit/test_multi_period_lp_compiler.py`. Confirm all pre-existing tests (Phase 1 included) still pass. | REQ-009 through REQ-013, NFR-001, NFR-005 | todo | See Test Coverage Map and `plan.md`'s Phase 2 worked fixture. |
 | T-012 | Add a `slow`-marked scale test sizing Phase 2's route × period growth. | REQ-009 | todo | RISK-004; follows `specs/0005-test-hardening/`/`specs/0009`'s benchmark precedent. |
-| T-013 | Add `specs/spec002/TRACEABILITY.md` rows `MPS-001` (Phase 1), `MPS-002` (Phase 2), `MPS-003` (recall-notice validation). | REQ-001 through REQ-013 | todo | New prefix — no existing row covers §22.11/§22.12 today. |
+| T-013 | Add `specs/engine_spec/TRACEABILITY.md` rows `MPS-001` (Phase 1), `MPS-002` (Phase 2), `MPS-003` (recall-notice validation). | REQ-001 through REQ-013 | todo | New prefix — no existing row covers §22.11/§22.12 today. |
 | T-014 | Update `docs/handoff.md` and `specs/README.md`: record this spec as done, and restate that §22.12's stochastic/scenario-tree extension and MIP/QP-within-multi-period remain open/deferred. | REQ-001 through REQ-013 | todo | Do only after T-001 through T-013 are all green. |
 
 Status values: `todo` | `in-progress` | `blocked` | `done`.

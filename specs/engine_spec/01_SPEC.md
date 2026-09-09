@@ -1,4 +1,4 @@
-# Spec002: Platform-Integrated, Standalone Securities-Lending Inventory Optimization Engine
+# Engine Spec: Platform-Integrated, Standalone Securities-Lending Inventory Optimization Engine
 
 ## 1. Document Control
 

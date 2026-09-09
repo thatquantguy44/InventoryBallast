@@ -1,4 +1,4 @@
-# Spec002 Integrated Delivery Roadmaps
+# Engine Spec Integrated Delivery Roadmaps
 
 ## Document Purpose
 
@@ -595,7 +595,7 @@ Each release must include:
 
 Changes to inventory equations, units, source authority, status semantics, non-relaxable constraints,
 or point-in-time rules require an architecture/model decision record and updates to the complete
-Spec002 document set.
+Engine Spec document set.
 
 ---
 

@@ -10,13 +10,13 @@
 
 ## Problem & Context
 
-`specs/spec002/01_SPEC.md` §24 ("Testing Strategy") is a full normative section — not implied,
+`specs/engine_spec/01_SPEC.md` §24 ("Testing Strategy") is a full normative section — not implied,
 not optional. It lists eleven categories of tests every implementation is expected to carry:
 unit (§24.1), property (§24.2), golden LP/elasticity/churn cases (§24.3-24.5), infeasibility
 (§24.6), integration (§24.7), performance (§24.8), and — for subsystems not yet built —
 Bloomberg-enrichment, eligibility/collateral/schedule, and agency/prime/platform tests
 (§24.9-24.11). Unlike every other requirement in `01_SPEC.md`, §24 has **no dedicated
-`specs/spec002/TRACEABILITY.md` rows of its own** (no `TST-*`/`QA-*` series) — it is a
+`specs/engine_spec/TRACEABILITY.md` rows of its own** (no `TST-*`/`QA-*` series) — it is a
 cross-cutting methodology every other row's own "Evidence" column is expected to satisfy, not a
 separately-tracked deliverable. That makes it easy for gaps to go unnoticed, which is exactly
 what an audit against the actual test suite found (2026-09-05, 141 tests passing across T01-T14):
@@ -107,7 +107,7 @@ smoke-scale benchmark harness — without inventing scope the domain model doesn
 | REQ-011 | The system shall provide a golden test reproducing §24.5's existing-loan churn case: a 1.00% current route fully allocated, a 1.10% candidate route, and both outcomes (unchanged when transition costs exceed the horizon fee uplift; churns to the higher-rate route when transition costs are zero). | must |
 | REQ-012 | The system shall provide a golden test reproducing §24.6's "hard utilization floor exceeds cap" infeasibility case, built from two independently-valid `UtilizationPolicy` records whose combination (not either alone) is infeasible. | must |
 | REQ-013 | The system shall provide a benchmark smoke test at the Core desk shape (§20.2) confirming `compile_lp` + `HighsBackend.solve` + `verify_solution` completes, returns `OPTIMAL`, and passes verification within a generous (non-flaky) wall-clock ceiling. | should |
-| REQ-014 | The system shall correct `specs/spec002/TRACEABILITY.md`'s `DOM-002` row (remove the stale "E3 scenario evidence pending T13" note, now resolved) and strengthen `LP-002`'s evidence with the new `InventoryBalanceConstraint` unit test (REQ-009). | must |
+| REQ-014 | The system shall correct `specs/engine_spec/TRACEABILITY.md`'s `DOM-002` row (remove the stale "E3 scenario evidence pending T13" note, now resolved) and strengthen `LP-002`'s evidence with the new `InventoryBalanceConstraint` unit test (REQ-009). | must |
 
 ## Non-Functional Requirements
 
@@ -134,7 +134,7 @@ smoke-scale benchmark harness — without inventing scope the domain model doesn
 | AC-011 | Given the churn fixture with transition costs exceeding the fee uplift, when solved, then the current route is unchanged; given zero transition costs, when solved, then inventory moves to the higher-rate route up to its demand maximum. | REQ-011 |
 | AC-012 | Given two `UtilizationPolicy` records on the same inventory whose combined floor/cap conflict, when solved, then the result is `INFEASIBLE`. | REQ-012 |
 | AC-013 | Given the Core desk benchmark fixture, when solved, then the result is `OPTIMAL`, verification passes, and wall-clock time is under the generous ceiling `plan.md` sets. | REQ-013 |
-| AC-014 | Given `specs/spec002/TRACEABILITY.md` after this spec, when `DOM-002` and `LP-002` are inspected, then neither references a stale "pending T13" note and `LP-002`'s evidence names the new dedicated test. | REQ-014 |
+| AC-014 | Given `specs/engine_spec/TRACEABILITY.md` after this spec, when `DOM-002` and `LP-002` are inspected, then neither references a stale "pending T13" note and `LP-002`'s evidence names the new dedicated test. | REQ-014 |
 
 ## Data & Dependencies
 

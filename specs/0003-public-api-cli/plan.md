@@ -320,7 +320,7 @@ introduce one). No feature flag, no staged rollout, no production traffic at ris
 revert of `services.py`, `facade.py`, `cli.py`, the `pyproject.toml`/`__init__.py` diffs, and
 (separately, since it touches an existing file) the `formulation/context.py` extraction — the latter
 should be called out on its own in any revert, per P5's note above. Observability is the CLI's own
-stderr diagnostics plus the test suite; `specs/spec002/TRACEABILITY.md`'s `PLT-002` row evidence
+stderr diagnostics plus the test suite; `specs/engine_spec/TRACEABILITY.md`'s `PLT-002` row evidence
 pointer and `docs/handoff.md`'s "Next priorities" section are updated once this spec is actually
 implemented (tracked as T-013/T-014 in `tasks.md`, not performed by this draft).
 

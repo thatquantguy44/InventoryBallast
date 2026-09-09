@@ -1,4 +1,4 @@
-# Spec002 Plan: Platform-Integrated, Standalone Inventory Optimization Engine
+# Engine Spec Plan: Platform-Integrated, Standalone Inventory Optimization Engine
 
 ## Status
 
@@ -96,21 +96,21 @@ adapter, not a core dependency.
 
 | Deliverable | Purpose |
 | --- | --- |
-| `specs/spec002/00_PLAN.md` | Scope, decisions, sequence, and handoff map. |
-| `specs/spec002/01_SPEC.md` | Full product, architecture, model, API, test, and operations specification. |
-| `specs/spec002/ROADMAPS.md` | Coordinated release, model, data, engineering, validation, and integration roadmaps. |
-| `specs/spec002/DICTIONARY.md` | Canonical business, data, mathematical, status, unit, and reason-code vocabulary. |
-| `specs/spec002/WHITEPAPER.md` | Self-contained technical rationale and model narrative with research references. |
-| `specs/spec002/EXAMPLES.md` | Deterministic worked examples and future golden-fixture expectations. |
-| `specs/spec002/TRACEABILITY.md` | Requirements mapped to modules, configuration, evidence, tasks, releases, and gates. |
-| `specs/spec002/OPERATIONAL_RUNBOOK.md` | Deployment, on-call, and incident procedures once implementation exists (placeholder; not yet written). |
+| `specs/engine_spec/00_PLAN.md` | Scope, decisions, sequence, and handoff map. |
+| `specs/engine_spec/01_SPEC.md` | Full product, architecture, model, API, test, and operations specification. |
+| `specs/engine_spec/ROADMAPS.md` | Coordinated release, model, data, engineering, validation, and integration roadmaps. |
+| `specs/engine_spec/DICTIONARY.md` | Canonical business, data, mathematical, status, unit, and reason-code vocabulary. |
+| `specs/engine_spec/WHITEPAPER.md` | Self-contained technical rationale and model narrative with research references. |
+| `specs/engine_spec/EXAMPLES.md` | Deterministic worked examples and future golden-fixture expectations. |
+| `specs/engine_spec/TRACEABILITY.md` | Requirements mapped to modules, configuration, evidence, tasks, releases, and gates. |
+| `specs/engine_spec/OPERATIONAL_RUNBOOK.md` | Deployment, on-call, and incident procedures once implementation exists (placeholder; not yet written). |
 | `projects/inventory_optimizer/` | Future self-contained implementation root. |
 | `projects/inventory_optimizer/src/inventory_optimizer/` | Portable core package. |
 | `projects/inventory_optimizer/tests/` | Unit, integration, golden, property, and performance tests. |
 | `src/qr_haven/integrations/inventory_optimizer.py` | Initial platform-owned QR Haven adapter. |
 
 This change creates only the specification artifacts. The implementation tree is a target described
-by the Spec002 document set, not part of this handoff change.
+by the Engine Spec document set, not part of this handoff change.
 
 ## Implementation Sequence
 

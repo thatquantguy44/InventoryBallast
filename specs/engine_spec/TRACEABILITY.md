@@ -1,8 +1,8 @@
-# Spec002 Requirements Traceability Matrix
+# Engine Spec Requirements Traceability Matrix
 
 ## Purpose
 
-This document maps the Spec002 requirements to the modules, configuration, evidence, implementation
+This document maps the Engine Spec requirements to the modules, configuration, evidence, implementation
 tasks, releases, and approval gates that satisfy them. It is the handoff control connecting
 `01_SPEC.md`, `EXAMPLES.md`, `ROADMAPS.md`, tests, and future code.
 

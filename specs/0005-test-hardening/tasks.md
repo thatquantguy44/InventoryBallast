@@ -18,7 +18,7 @@ under the 120s ceiling). Ruff clean.
   -q` for the benchmark test).
 - No secrets, credentials, or private data introduced.
 - No already-passing test is modified or weakened.
-- `specs/spec002/TRACEABILITY.md`'s `DOM-002`/`LP-002` rows are updated alongside T-007, not
+- `specs/engine_spec/TRACEABILITY.md`'s `DOM-002`/`LP-002` rows are updated alongside T-007, not
   deferred to a later commit.
 
 ## Task List
@@ -31,7 +31,7 @@ under the 120s ceiling). Ruff clean.
 | T-004 | Add `tests/golden/test_existing_loan_churn.py` (§24.5, both variants). | REQ-011 | done | Fixture cites the exact spec sentence each numeric choice satisfies (RISK-003). |
 | T-005 | Add `tests/golden/test_utilization_floor_exceeds_cap.py` (§24.6). | REQ-012 | done | Two independently-valid `UtilizationPolicy` records; the conflict only exists in combination. |
 | T-006 | Add `tests/benchmark/test_core_desk_scale.py`, marked `@pytest.mark.slow`; register the `slow` marker in `pyproject.toml`. | REQ-013, NFR-003 | done | Vectorized fixture construction; generous (120s) wall-clock ceiling, not a tight regression assertion. |
-| T-007 | Update `specs/spec002/TRACEABILITY.md`: remove `DOM-002`'s stale "E3 scenario evidence pending T13" note (now resolved by `specs/0004-scenario-engine/`); add the new `InventoryBalanceConstraint` test to `LP-002`'s evidence. | REQ-014 | done | Prose-only change; neither row's `IMPLEMENTED` status changes. |
+| T-007 | Update `specs/engine_spec/TRACEABILITY.md`: remove `DOM-002`'s stale "E3 scenario evidence pending T13" note (now resolved by `specs/0004-scenario-engine/`); add the new `InventoryBalanceConstraint` test to `LP-002`'s evidence. | REQ-014 | done | Prose-only change; neither row's `IMPLEMENTED` status changes. |
 | T-008 | Update `docs/handoff.md`: note the closed test-coverage gaps and the `slow`-marker opt-in invocation; mark this spec done. | REQ-001 through REQ-014 | done | |
 
 Status values: `todo` | `in-progress` | `blocked` | `done`.
@@ -53,7 +53,7 @@ Status values: `todo` | `in-progress` | `blocked` | `done`.
 | AC-011 | `test_existing_loan_churn.py` | done |
 | AC-012 | `test_utilization_floor_exceeds_cap.py` | done |
 | AC-013 | `test_core_desk_scale.py` | done |
-| AC-014 | Manual: `specs/spec002/TRACEABILITY.md` diff reviewed against the traceability update above | done |
+| AC-014 | Manual: `specs/engine_spec/TRACEABILITY.md` diff reviewed against the traceability update above | done |
 
 ## Follow-ups
 

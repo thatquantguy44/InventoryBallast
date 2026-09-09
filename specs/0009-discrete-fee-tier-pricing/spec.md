@@ -168,7 +168,7 @@ and the only approximation is which prices were offered as candidates. That dist
   the delta from the reference fee (NFR-003).
 - `domain.results.OptimizationResult` — gains an additive, defaulted pricing section (REQ-007).
 - `solvers.highs.HighsBackend` (T09) — already MIP-capable; no changes.
-- `specs/spec002/TRACEABILITY.md` rows `LP-004` (elasticity-adjusted demand caps) and `LP-009`
+- `specs/engine_spec/TRACEABILITY.md` rows `LP-004` (elasticity-adjusted demand caps) and `LP-009`
   (MIP/QP/PWL/NLP capability gating) — this spec's evidence targets.
 
 ## Risks

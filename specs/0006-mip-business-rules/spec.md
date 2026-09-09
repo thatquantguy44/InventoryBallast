@@ -10,7 +10,7 @@
 
 ## Problem & Context
 
-`specs/spec002/01_SPEC.md` §14.1 ("MIP triggers") and `00_PLAN.md`'s Phase 3 ("MIP business
+`specs/engine_spec/01_SPEC.md` §14.1 ("MIP triggers") and `00_PLAN.md`'s Phase 3 ("MIP business
 rules") define discrete decision requirements the baseline continuous LP (T08) cannot represent:
 all-or-none fill, minimum active ticket, integer lot multiples, fixed route activation cost,
 maximum active route count (cardinality), mutual exclusion, and one-fee-tier-per-demand-group
@@ -146,7 +146,7 @@ approach `specs/0005-test-hardening/` used for its two ungrounded golden cases.
   capable; no changes.
 - `validation.solution_verifier.verify_solution` (T10) — already integrality-aware; no changes.
 - `facade.InventoryOptimizer` (T12) — gains the auto-routing logic (REQ-007).
-- `specs/spec002/TRACEABILITY.md`'s `LP-009` row — this spec's evidence target (MIP portion only;
+- `specs/engine_spec/TRACEABILITY.md`'s `LP-009` row — this spec's evidence target (MIP portion only;
   QP/PWL/NLP stay `SPECIFIED`).
 
 ## Risks
