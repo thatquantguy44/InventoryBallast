@@ -38,15 +38,27 @@ def _day_count_fraction(formulation_config: FormulationConfig) -> float:
     return formulation_config.planning_horizon_days / divisor
 
 
+def fee_revenue_coefficient_for_tau(
+    route: LoanRoute, inventory: SecurityInventory, day_count_fraction: float
+) -> float:
+    """The per-share ``q_j`` coefficient (Section 11.12), parameterized directly by the day-count
+    fraction rather than deriving it from ``FormulationConfig.planning_horizon_days`` -- shared with
+    specs/0010-multi-period-settlement/'s ``components.objective_terms.multi_period_economics``,
+    which needs a period-specific ``tau`` instead of the single-period scalar every other caller
+    uses. ``fee_revenue_coefficient`` below is a thin single-period wrapper over this."""
+    return inventory.price_usd * day_count_fraction * (
+        route.fee_rate * route.revenue_share - route.variable_cost_rate
+    )
+
+
 def fee_revenue_coefficient(
     route: LoanRoute, inventory: SecurityInventory, formulation_config: FormulationConfig
 ) -> float:
     """The per-share ``q_j`` coefficient (Section 11.12). Shared by ``contribute()``,
     ``attribute()``, and ``reporting.explanations`` so all three agree on one formula rather than
     each re-deriving it."""
-    tau = _day_count_fraction(formulation_config)
-    return inventory.price_usd * tau * (
-        route.fee_rate * route.revenue_share - route.variable_cost_rate
+    return fee_revenue_coefficient_for_tau(
+        route, inventory, _day_count_fraction(formulation_config)
     )
 
 

@@ -184,18 +184,25 @@ def _build_route_groupings(request: OptimizationRequest) -> RouteGroupings:
 
 @dataclass(frozen=True, slots=True)
 class MultiPeriodContext:
-    """Everything the period-indexed row-building functions below need for one planning period
-    ``t``. ``request``, ``groupings``, and ``demand_caps`` are period-invariant (route ids don't
-    change per period, only certain bound *values* do -- computed once, shared by every period, not
-    rebuilt per period). ``demand_caps`` holds only the effective cap in shares (``D_g``, constant
-    across ``t`` -- ``plan.md``'s Non-Goal), not the full ``elasticity.EvaluatedDemand`` the
-    single-period ``BuildContext`` carries -- nothing here needs the rest of that shape."""
+    """Everything the period-indexed row-building functions below, and
+    ``components.objective_terms.multi_period_economics``'s objective contribution, need for one
+    planning period ``t``. ``request``, ``groupings``, and ``demand_caps`` are period-invariant
+    (route ids don't change per period, only certain bound *values* do -- computed once, shared by
+    every period, not rebuilt per period). ``demand_caps`` holds only the effective cap in shares
+    (``D_g``, constant across ``t`` -- ``plan.md``'s Non-Goal), not the full
+    ``elasticity.EvaluatedDemand`` the single-period ``BuildContext`` carries -- nothing here needs
+    the rest of that shape. ``day_count_fraction``/``discount_factor`` (REQ-007, REQ-011) are this
+    period's own economics factors (``components.objective_terms.multi_period_economics.
+    period_economics_factors``) -- unused by the six row-building functions, read only by the
+    objective contribution."""
 
     request: OptimizationRequest
     period: int
     bounds: PeriodBounds
     groupings: RouteGroupings
     demand_caps: Mapping[str, float]
+    day_count_fraction: float
+    discount_factor: float
 
     @property
     def inventory_by_id(self) -> Mapping[str, SecurityInventory]:
