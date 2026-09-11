@@ -1,0 +1,40 @@
+#!/bin/sh
+# Pre-commit hook for InventoryBallast.
+#
+# This repo adopted QuantSmith's scaffold (hooks/stages/*.sh) but never wired
+# local Git hooks, per docs/adoption_guide.md step 6: "The SDK's own
+# .githooks/ and setup-hooks.sh enforce SDK-repo invariants ... otherwise wire
+# the hooks/stages/ gates into your own hooks." This is that wiring, written
+# for InventoryBallast's own layout rather than copied from the SDK repo.
+#
+# Only two checks run here, deliberately: the ones cheap enough to run on
+# every commit without slowing anyone down. Everything else (spec chain,
+# traceability, agent catalog, pipeline contracts) stays in CI, which already
+# enforces those (see .github/workflows/ci.yml).
+
+set -e
+ROOT_DIR=$(git rev-parse --show-toplevel)
+cd "$ROOT_DIR"
+
+# --- Authorship: refuse to create a commit under an AI-agent git identity ---
+# This is the only place this check is cheap -- once the commit exists,
+# fixing it means rewriting history (which may already be impossible if the
+# commit has been merged; see docs/handoff.md's own account of this).
+#
+# QF_ATTRIB_RANGE="HEAD..HEAD" is deliberately an empty range: it isolates
+# hooks/stages/agent-attribution-check.sh's identity-of-the-next-commit check
+# (its "part 1") from its history-range scan (its "part 2"). The range scan
+# belongs in pre-push/CI, not here -- this repo's own main already carries
+# two commits with a bad identity that cannot be un-merged, and a pre-commit
+# hook that re-litigated already-merged history on every future commit would
+# block all further work on this repo permanently, not just catch new
+# mistakes.
+QF_ATTRIB_CHECK_IDENTITY=1 QF_STAGE_ENFORCE=1 QF_ATTRIB_RANGE="HEAD..HEAD" \
+  sh hooks/stages/run-stage.sh agent-attribution
+
+# --- Secrets: catch a leaked credential before it's committed, not after ---
+# No QF_DIFF_BASE set: qf_changed_files() falls back to staged + unstaged
+# changes, which is exactly what's about to be committed.
+QF_STAGE_ENFORCE=1 sh hooks/stages/run-stage.sh secret-scan
+
+echo "Pre-commit checks passed."
