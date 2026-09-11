@@ -38,6 +38,7 @@ and links concrete evidence.
 | `SCH` | Eligibility and other executable schedules |
 | `COL` | Collateral schedules and allocation |
 | `SCN` | Scenarios and timing |
+| `MPS` | Multi-period settlement (deterministic projection and joint LP) |
 | `SOL` | Solver adapters and statuses |
 | `VER` | Independent verification, repair, and explanation |
 | `DAT` | Bloomberg/reference data and point-in-time correctness |
@@ -129,6 +130,21 @@ and links concrete evidence.
 | DAT-004 | Corporate-action changes preserve history and invalidate affected caches | 22.8 | event adapter/cache | event versions | amendment/cancel tests | T21 / R3 / G2 | `SPECIFIED` |
 | DAT-005 | Liquidity and predictive estimates are calibrated to internal outcomes and labeled estimates | 22.5-22.7 | upstream feature adapter | model versions | walk-forward/challenger tests | T23-T25 / R3-R5 / G3 | `SPECIFIED` |
 | DAT-006 | Licensed/vendor payloads do not enter fixtures or raw logs | 21.3, 22.2 | redaction/adapters | entitlement policy | fixture/log scan | T16, T20 / R3 / G2 | `SPECIFIED` |
+
+---
+
+## Multi-Period Settlement
+
+No existing row covered §22.11/§22.12 before `specs/0010-multi-period-settlement/` (owner-approved
+2026-09-07 to build both designs, sequenced): §22.11's deterministic form precedes §22.12's
+stochastic/scenario-tree extension, which remains untouched and out of V0 scope per `00_PLAN.md`'s
+own "Deferred extensions" list.
+
+| ID | Requirement | Spec location | Planned module/component | Config/input | Evidence | Task/release/gate | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| MPS-001 | A deterministic projection walks the already-solved period-0 book forward through known future trade events, reusing the existing scenario-application mechanics unchanged | 22.11 | `settlement/project.py`, `scenarios/apply.py`'s shared `select_effective_events`/`apply_events` | `OptimizationRequest.planning_periods`/`.known_future_events` | `tests/golden/test_multi_period_settlement.py`, `tests/unit/test_settlement_project.py` (`specs/0010-multi-period-settlement/` Phase 1) | T-001–T-006 / Phase 5 item 2 | `IMPLEMENTED` |
+| MPS-002 | A joint multi-period LP compiles §22.11's balance identities as real per-period constraints, letting period-0 allocation account for a known future event, as a pure continuous LP excluding MIP/QP/fee-tier triggers | 22.11 | `formulation/multi_period.py`, `components/objective_terms/multi_period_economics.py` | `OptimizationRequest.planning_periods`/`.known_future_events`, `MultiPeriodConfig.daily_discount_rate` | `tests/golden/test_multi_period_lp.py`, `tests/unit/test_multi_period_lp_compiler.py`, `tests/benchmark/test_multi_period_lp_scale.py` (`specs/0010-multi-period-settlement/` Phase 2) | T-007–T-012 / Phase 5 item 2 | `IMPLEMENTED` |
+| MPS-003 | A known future recall's notice is validated against the referenced route's contractual minimum, uniformly for both designs | 22.11 | `validation/reconciliation.py::check_recall_notice_sufficiency` | `OptimizationRequest.known_future_events` | `tests/unit/test_validation.py::test_recall_notice_insufficient_is_reported`/`test_recall_notice_sufficient_is_accepted` (`specs/0010-multi-period-settlement/` T-002) | T-002 / Phase 5 item 2 | `IMPLEMENTED` |
 
 ---
 
@@ -270,6 +286,7 @@ Primary requirements: all baseline requirements plus `PRM-001` through `PRM-010`
 | Schedules/collateral/scenarios | `SCH-001`–`SCH-004`, `COL-001`–`COL-004`, `SCN-001`–`SCN-004` | E2-E5 |
 | Solver/verification/results | `SOL-001`–`SOL-003`, `VER-001`–`VER-006` | E1-E9 |
 | Point-in-time/Bloomberg | `DAT-001`–`DAT-006` | Synthetic adapter fixtures; detailed implementation examples deferred |
+| Multi-period settlement | `MPS-001`–`MPS-003` | Hand-constructed fixtures (`specs/0010-multi-period-settlement/`); no `EXAMPLES.md` worked case exists for a multi-period scenario |
 | Platform integration | `PLT-001`–`PLT-006` | E9 |
 | Agency | `AGY-001`–`AGY-008` | E6 |
 | Prime | `PRM-001`–`PRM-010` | E7 |
