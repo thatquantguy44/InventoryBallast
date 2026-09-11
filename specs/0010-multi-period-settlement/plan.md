@@ -522,6 +522,26 @@ row-building functions need both to exist and be callable at all; T-010 remains 
 the objective term (T-009's own output) and ties everything into one `CompiledProblem` via
 `compile_multi_period_lp`/`solve_multi_period`.
 
+**T-010.** `solve_multi_period` needs a default `SolverBackend` when its own `backend` parameter is
+`None`, the same job `facade._resolve_backend`/`_solver_options_from_config` already do for
+`InventoryOptimizer.optimize()`. Rather than import those (private) helpers -- which this plan's
+own "A separate entry point" section already commits to never touching `facade.py` at all --
+`formulation/multi_period.py` carries small, intentionally duplicated equivalents. This is the same
+kind of tolerated small duplication this repo already accepts elsewhere (e.g. `_policy_applies`
+duplicated across `components/constraints/utilization.py`/`counterparty.py`/`formulation/
+context.py`), traded for a stronger guarantee: nothing in this spec's Phase 2 code path can ever
+accidentally reach into or destabilize `facade.py`.
+
+Also cross-checked during T-010: a circular import surfaced between `formulation/multi_period.py`
+(T-010 needs `contribute_multi_period_objective` from `components.objective_terms.
+multi_period_economics`) and that module (T-009 needs `MultiPeriodContext`/`period_variable_key`
+from `formulation.multi_period` for its own type hints and variable-key construction). Resolved by
+making `multi_period_economics.py`'s `MultiPeriodContext` import `TYPE_CHECKING`-only (it is used
+purely as a type annotation, and the module already has `from __future__ import annotations`) and
+giving it its own private, duplicate `_period_variable_key` (the same tiny formula, not imported) --
+the established pattern this codebase already uses once (`adapters/dataframe.py`'s own
+`TYPE_CHECKING`-guarded `pandas` import).
+
 ## Open Questions
 
 - Whether a future spec should let fee rates/prices vary per period within `known_future_events`
