@@ -9,9 +9,10 @@ The roadmap a new owner (human or agent) reads first. Keep this in sync: a new
 InventoryBallast is a portable, solver-neutral securities-lending inventory
 optimization engine. It was extracted (2026-09-04) from the `QR-Haven` monorepo's
 `projects/inventory_optimizer/` into its own repository, preserving that
-directory's original 6 commits via `git subtree split`. It is not yet pushed to a
-GitHub remote — it exists as a local repo only, by the owner's choice at
-extraction time.
+directory's original 6 commits via `git subtree split`. It started as a local-only
+repo by the owner's choice at extraction time; a GitHub remote
+(`thatquantguy44/InventoryBallast`) now exists (since ~2026-09-09) — see "Open
+items" below for its current state and a real gap CI surfaced once it did.
 
 It also adopts the [QuantSmith](https://github.com/joshualutkemuller/QuantSmith)
 agentic scaffold (`instructions/`, `hooks/`, `agents/`, `prompts/`, `templates/`,
@@ -80,17 +81,19 @@ Per `specs/engine_spec/00_PLAN.md`'s status line and `TRACEABILITY.md`:
   against the normative "Testing Strategy" section found `hypothesis` (a pinned
   dev dependency since T01) had never actually been used; `specs/0005-test-
   hardening/` closes that and four other real gaps — see its entry below.
-- **Drafted, not approved:** `specs/0010-multi-period-settlement/` (Phase 5 item 2, deterministic
-  form; `01_SPEC.md` §22.11) — three open design questions need owner sign-off before any code is
-  written; see "Next priorities" below.
+- **Done (2026-09-09):** `specs/0010-multi-period-settlement/` (Phase 5 item 2; `01_SPEC.md` §22.11)
+  — both the deterministic projection (Phase 1, `settlement/`) and the joint multi-period LP
+  (Phase 2, `formulation/multi_period.py::solve_multi_period`), all fourteen tasks (`T-001`-`T-014`)
+  done; see its own entry below. 275 tests pass (2 skipped for the absent `pandas` extra) in the
+  default run, plus a separate `slow`-marked scale benchmark.
 
 ## Environment
 
 ```bash
 python3 -m venv .venv
 .venv/bin/python -m pip install -e ".[dev,highs,dataframe,agentic]"
-.venv/bin/python -m pytest tests/ -q         # 220 passed, 2 skipped (pandas absent), as of this writing (fast; excludes `slow`)
-.venv/bin/python -m pytest tests/ -m slow -q # 2 benchmark smoke tests (Core desk LP + QP scale, ~1-2s)
+.venv/bin/python -m pytest tests/ -q         # 275 passed, 2 skipped (pandas absent), as of this writing (fast; excludes `slow`)
+.venv/bin/python -m pytest tests/ -m slow -q # 4 benchmark smoke tests (Core desk LP, QP, fee-tier, multi-period LP scale)
 inventory-optimizer doctor                    # sanity-check the installed console script
 ```
 
@@ -403,12 +406,13 @@ moment a cheaper tier is selected) — a single guarded line, inert for every un
 extends its `IMPLEMENTED` status to cover Section 12.4's discrete price-selection MIP (PWL/NLP —
 Section 14.3-14.4's continuous-fee case — and QP's other three candidate terms stay `SPECIFIED`).
 
-### Phase 5 item 2 — deterministic multi-period settlement (`01_SPEC.md` §22.11) — drafted, not approved (2026-09-07)
+### Phase 5 item 2 — multi-period settlement (`01_SPEC.md` §22.11) — done (2026-09-09)
 
-`specs/0010-multi-period-settlement/` (`spec.md`, `plan.md`, `tasks.md`) — a **Draft** spec, not
-approved and not implemented. Unlike `0009`, this one carries **three open design questions that
-genuinely need owner judgment**, not just technical sign-off, so it is drafted more cautiously than
-`0009` was and should not be implemented as-is.
+`specs/0010-multi-period-settlement/` (`spec.md`, `plan.md`, `tasks.md`) — **Approved** (owner
+sign-off 2026-09-07) and fully implemented, both designs, all fourteen tasks (`T-001`-`T-014`)
+done. This spec originally carried three open design questions needing real owner judgment, not
+just technical sign-off (see the resolution below); once resolved, the owner chose to build *both*
+designs rather than pick one, sequenced.
 
 The key finding that shaped it: §22.11 already specifies time-bucketed balance identities
 (`on_loan_i,t`/`available_i,t`/`lendable_i,t`) normatively, and says the deterministic form "should
@@ -417,43 +421,67 @@ precede a fully stochastic formulation" (§22.12) — the same relationship `000
 built the discrete alternative instead of the deferred thing itself). Here, V0 defers "multi-period
 *stochastic* optimization" specifically — the deterministic precursor is not itself excluded.
 
-**Two designs satisfy §22.11 and this draft recommends the narrower one, but does not decide it
-unilaterally:**
+**Resolution of the three original open questions (owner, 2026-09-07):** build both designs,
+sequenced (projection first, joint LP second, sharing one set of primitives); validate a known
+future `RECALL`'s notice against `LoanRoute.recall_notice_days` in V1 rather than deferring it; the
+per-day discount rate is a configurable field (`MultiPeriodConfig.daily_discount_rate`), defaulting
+to zero.
 
-- **Design A (rejected for now):** a full joint multi-period LP — time-indexed decision variables
-  for every route across every period, with the objective jointly optimizing the whole horizon.
-  The complete answer to §22.11, but multiplies variable/row count by route count × period count,
-  needs time-varying route bounds and a real calendar, and changes what "the decision" means
-  (period-0 allocation could legitimately be suboptimal *by itself* to help period 3).
-- **Design B (recommended, drafted):** period 0 stays exactly today's existing single-period
-  solve — the only period actually decided. Periods 1..N are a mechanical, unoptimized *projection*
-  of what already-known future `TradeEvent`s (a sale, a recall, a return, already dated — the exact
-  events §13.2 already says a single-period solve ignores past `effective_date`) will do to the
-  already-solved book, reusing `scenarios/apply.py`'s existing, already-tested per-event-type
-  mechanics (extracted into a shared `select_effective_events`/`apply_events` pair, called once per
-  period instead of once per scenario) rather than inventing new balance arithmetic. A new
-  `settlement/` package (mirroring `scenarios/`) and a new, separate `MultiPeriodProjection` result
-  type (mirroring `ScenarioComparison`/`StressTestReport`'s own precedent) — zero changes to
-  `formulation/`, `components/`, or any compiler.
+**Phase 1 — deterministic projection (`settlement/`; T-001-T-006; done 2026-09-07).** Period 0
+stays exactly today's existing single-period solve — the only period actually decided. Periods
+1..N are a mechanical, unoptimized projection of what already-known future `TradeEvent`s (a sale, a
+recall, a return, already dated — the exact events §13.2 says a single-period solve ignores) do to
+the already-solved book, via `settlement/project.py::project_multi_period`. Reuses
+`scenarios/apply.py`'s existing per-event-type mechanics, extracted into a shared
+`select_effective_events`/`apply_events` pair (all 13 of `apply_scenario`'s own pre-existing tests
+kept passing unchanged through that extraction). New, additive result type
+`domain/settlement.py::MultiPeriodProjection` (`mode="projected"`), mirroring
+`ScenarioComparison`/`StressTestReport`'s own precedent — zero changes to `formulation/`,
+`components/`, or any compiler. `validation/reconciliation.py::check_recall_notice_sufficiency`
+(T-002) is shared by both designs.
 
-**Three open questions block approval**, each requiring real owner judgment rather than
-engineering sign-off: (1) is the projection form (B) the right first step, or does the desk need
-the fuller joint LP (A) from the outset — they answer materially different questions; (2) should a
-known future `RECALL` event be validated against `LoanRoute.recall_notice_days` in V1, or deferred
-(the draft defers it); (3) what per-day discount rate should V1 default to — the draft proposes
-zero (no discounting), matching this repo's other zero-default extensions.
+**Phase 2 — joint multi-period LP (`formulation/multi_period.py`; T-007-T-010; done 2026-09-09).** A
+new compiler replicates every existing baseline LP component's exact mathematical structure once
+per planning period (period-suffixed `q`/`inc`/`dec`/`a` variable blocks, e.g. `"RT-A@001"`), linked
+by a per-period transition identity, with the objective jointly maximizing discounted revenue
+across the whole horizon — so period-0 allocation can genuinely account for a known future event
+rather than merely being reported against it afterward. `formulation.compiler_support.
+multi_period_conflict_issues` (T-007) fails closed if a request combines `planning_periods` with
+any MIP/QP/fee-tier trigger — Phase 2's V1 is a pure continuous LP. `solve_multi_period` (T-010) is
+a **new, separate entry point**, deliberately not folded into `facade.InventoryOptimizer.
+optimize()`'s existing auto-routing: Phase 1's own projection *requires* `optimize()` to keep
+solving period 0 alone, ignoring `planning_periods` entirely, since that period-0-only result is
+its own input — auto-routing a multi-period request away from `optimize()` would silently break
+Phase 1. `facade.py` itself is untouched by this spec.
 
-Also explicitly deferred, not attempted here: §22.12's stochastic/scenario-tree extension (chance
-constraints, CVaR, probability-weighted scenarios — 00_PLAN.md's own deferred-extensions list
-already excludes this); a real business-day/holiday calendar (no calendar port exists anywhere in
-this repo yet — every `planning_periods` date is treated as a valid settlement day for V1);
-corporate-action deltas; and a CLI subcommand (library function only, matching how `run_stress_test`
-shipped in `specs/0004-scenario-engine/`).
+Two implementation-level decisions surfaced only once code was written and are recorded, not
+picked silently (`plan.md`'s "Deviations Discovered During Implementation"): (1) `RETURN` (a
+borrower's voluntary return) lowers both a route's `maximum_quantity_shares` and
+`hard_minimum_quantity_shares` by the returned quantity, unlike `RECALL` (a lender's contractual
+pull), which lowers only the max, floored at the *unchanged* minimum — `plan.md`'s own text draws
+this distinction; (2) an already-ineligible route's upper bound at period `t >= 1` clamps to its
+own period-0 baseline `current_quantity_shares`, since there is no period-`(t-1)` scalar to clamp
+against once quantity becomes a free decision variable at later periods — no known future event
+ever makes a route newly ineligible, so this only matters for a route that started that way.
 
-**Do not implement this spec as scoped without owner sign-off on the three open questions above** —
-mirroring the process `specs/0009-discrete-fee-tier-pricing/` went through (drafted, then approved
-once its own three blocking questions were resolved), but with materially larger, more business-
-judgment-shaped questions this time.
+**What's genuinely still open, not silently dropped (T-011-T-013; done 2026-09-09/11):** 20 new
+Phase 2 tests (`tests/golden/test_multi_period_lp.py`, `tests/unit/
+test_multi_period_lp_compiler.py`, on top of Phase 1's 15) plus a `slow`-marked scale benchmark
+(`tests/benchmark/test_multi_period_lp_scale.py`, RISK-004's route×period growth); 275 passed, 2
+skipped total, zero regressions. `specs/engine_spec/TRACEABILITY.md` gained a new `MPS` prefix and
+three rows (`MPS-001`-`MPS-003`), all `IMPLEMENTED` — no existing row covered §22.11/§22.12 before
+this spec.
+
+**Explicitly deferred, per the spec's own Non-Goals, not forgotten:**
+- **§22.12's stochastic/scenario-tree extension** (chance constraints, CVaR, probability-weighted
+  scenarios) — entirely untouched; `00_PLAN.md`'s own deferred-extensions list already excludes
+  this, and §22.11 itself says the deterministic form should come first.
+- **MIP/QP business rules combined with the joint multi-period LP** — deferred (the joint LP's V1
+  fails closed on any such combination); no desk need identified yet.
+- A real business-day/holiday calendar (no calendar port exists anywhere in this repo; every
+  `planning_periods` date is treated as a valid settlement day for V1), corporate-action deltas,
+  time-varying fee rates/prices within the horizon, and a CLI subcommand (library function only,
+  matching how `run_stress_test` shipped in `specs/0004-scenario-engine/`).
 
 After Phase 5: the Bloomberg-enriched realism workstream and the agency/prime
 desk workstream — see `00_PLAN.md` for exit gates on each.
@@ -567,7 +595,7 @@ beyond just the constitution/gates already wired into CI.
 | T11 (done) — shadow prices, solver diagnostics, reason codes | `agents/optimization/solver_diagnostics_sensitivity/` |
 | T12 (done), T13-T14 (done), Phase 3 (done), Phase 4 (done) / later phases — turning an ambiguous next decision into variables/constraints/ACs before coding | `agents/optimization/problem_formulation/` |
 | Phase 3 (done) — MIP business rules (lot sizes, all-or-none, cardinality) | `agents/optimization/mixed_integer_optimization/` |
-| Phase 5 (next up) — nonlinear/multi-period research | `agents/optimization/problem_formulation/`, `agents/optimization/linear_programming/` for the reused baseline |
+| Phase 5 (done) — nonlinear/multi-period research | `agents/optimization/problem_formulation/`, `agents/optimization/linear_programming/` for the reused baseline |
 | Collateral workstream (T30-T32: haircuts, capacity, joint mode) | `agents/optimization/collateral_margin_optimization/` — named for exactly this problem |
 | General LP review as more constraint components get added | `agents/optimization/linear_programming/` |
 | Routing the above as work grows | `agents/optimization/optimization_orchestrator/` |
@@ -618,46 +646,66 @@ HiGHS/`CompiledProblem` stack — not a replacement for it. Verified concretely
 ### How to actually start
 
 **T11, T12, T13-T14, the §24 test-hardening pass, Phase 3 (MIP business
-rules), Phase 4 (QP allocation-stability), the tabular result output spec, and
-Phase 5 item 1 (discrete fee-tier pricing) are all done**
-(2026-09-04, 2026-09-05 ×5, 2026-09-06, 2026-09-07) — see above. Branch
-`0009-discrete-fee-tier-pricing` carried the last of these and has already been
-merged to `main` (fast-forward, local-only — this repo has no GitHub remote
-configured at all yet, see "Open items" below).
+rules), Phase 4 (QP allocation-stability), the tabular result output spec,
+Phase 5 item 1 (discrete fee-tier pricing), and Phase 5 item 2 (multi-period
+settlement, both designs) are all done** (2026-09-04, 2026-09-05 ×5,
+2026-09-06, 2026-09-07, 2026-09-09) — see above. All of it is merged to
+`main` on GitHub (`thatquantguy44/InventoryBallast` — see "Open items" below;
+the remote no longer needs creating).
 
-**Next up: Phase 5 item 2 is drafted, not approved.**
-`specs/0010-multi-period-settlement/` (branch `0010-multi-period-settlement`, not yet merged) is a
-**Draft** spec — see its own entry above for the full account. Unlike item 1, this one's next step
-is **not** implementation: it carries three genuine, business-judgment design questions (projection
-vs. full joint multi-period LP; recall-notice validation in/out of V1; default discount rate) that
-need the owner's decision, not an agent's, before `tasks.md`'s T-001 can start. `00_PLAN.md`'s own
-Phase 5 guidance — "promote an extension only after benchmark, convergence, and fallback behavior
-are documented" — is stricter than any prior phase's exit gate; that stricter bar is exactly why
-this draft surfaces the fork explicitly rather than picking one silently the way earlier phases'
-narrower, more mechanical decisions could be made directly. Bring the three open questions to the
-owner; once resolved, update `spec.md`'s Status to Approved and proceed through `tasks.md` the same
-way `0009` did.
+**Next up: nothing in the engine spec's own phase sequence is scoped yet.**
+Per `00_PLAN.md`, after Phase 5 the two remaining workstreams are the
+Bloomberg-enriched realism track (§22, `DAT-*` rows, all `SPECIFIED`) and the
+agency/prime desk track (§23, `AGY-*`/`PRM-*` rows, all `SPECIFIED`) — neither
+has a `specs/NNNN-*` directory yet. The "Possible spec idea: schedules/
+collateral (T29-T32) via DocumentRefinery" section above is the most
+concretely scoped candidate among them, but is explicitly flagged as an idea,
+not a plan, pending DocumentRefinery's own Phase 4 (CSA/lending-fee schedules)
+maturing. Bring a real desk need to the owner before starting any of these —
+none has the kind of "spec already says exactly what to build" grounding that
+made `0009`/`0010` straightforward once approved.
+
+**Also worth doing, lower stakes than a new phase:** `docs/adoption_guide.md`
+step 6 was finally wired in this repo (`.githooks/`, `setup-hooks.sh`, a
+Claude Code `SessionStart` hook) — see "Open items" below for the real gap
+this closed and the one it didn't.
 
 ## Open items for the next agent (not yet resolved)
 
-- **GitHub remote:** none yet. Local commits only. Create when the owner asks.
+- **GitHub remote: exists now.** `thatquantguy44/InventoryBallast`, created around 2026-09-09.
+  `main` has real history via merged PRs (#1 Phase 1, #2 a docs rename, #3-#4 Phase 2, #5 the git
+  hooks below); CI runs for real on every push/PR.
 - **`quantsmith` pin:** `requirements.txt` and `pyproject.toml`'s `agentic` extra
   pin `quantsmith @ git+...@3951654f56c995465b4c090f39eeb34f8c9671ff` — the exact
   `origin/main` commit at adoption time, because QuantSmith has no tagged release
   yet. Re-pin to a tag once one exists.
-- **CI not yet run for real:** `.github/workflows/ci.yml` was added and its gate
-  commands were dry-run locally (`sh hooks/stages/run-stage.sh ...`, all passing),
-  but it has never executed on actual GitHub Actions since there's no remote yet.
-  Verify green on first push.
-- **Attribution policy: adopted and enforced.** `CLAUDE.md`'s "GitHub posts"
-  section says to omit AI attribution footers unconditionally, and CI's `gates`
-  job now runs `hooks/stages/agent-attribution-check.sh` **enforced**
-  (`QF_STAGE_ENFORCE=1`) — it fails the build if a commit carries an AI
-  author/co-author. The commit history was rewritten (`git filter-branch
-  --msg-filter`, local-only, never pushed) to strip the `Co-Authored-By: Claude
-  Sonnet 5` trailers that earlier commits had; author/committer identity on
-  every commit was already the repo owner's own, so only the trailers needed
-  removing. Any agent committing here going forward must not add one.
+- **CI runs for real now — and it caught a real gap.** `.github/workflows/ci.yml`'s `gates` job
+  (spec/spec-index/agent-catalog/pipeline-contract/secret-scan/`agent-attribution`, all
+  `QF_STAGE_ENFORCE=1`) and `tests` job both run on every push/PR. The `tests` job has been green
+  throughout. **The `agent-attribution` check failed on PRs #3 and #4** — a remote agent session's
+  own git identity was `Claude <noreply@anthropic.com>` (the execution environment's default, not
+  something anyone configured on purpose), and both PRs were merged by the owner despite the
+  failing check (i.e. `gates` is not currently a *required* status check in branch protection — it
+  reports, it doesn't block). **`main` now permanently carries 5 commits with this bad identity**
+  (all of spec 0010 Phase 2's own commits: T-008 through T-013) — rewriting them would mean
+  rewriting `main` itself, a materially bigger operation than anything attempted so far, and
+  deliberately not done without a separate, explicit decision to do it. This is a known, disclosed
+  wart in `main`'s own history, not a hidden one.
+- **Local Git hooks: now wired (2026-09-11), closing half the gap above.** Per
+  `docs/adoption_guide.md` step 6 in the QuantSmith SDK repo ("wire the gates into your own hooks,
+  skip `.githooks/`" — the SDK's own `.githooks/`/`setup-hooks.sh` enforce SDK-repo invariants, not
+  this repo's), this repo now has its own `.githooks/{pre-commit,commit-msg,pre-push}` +
+  `setup-hooks.sh` (root), verified live to actually refuse a commit/push under an AI-agent
+  identity rather than only reporting it after the fact in CI. A Claude Code `SessionStart` hook
+  (`.claude/hooks/session-start.sh`, registered in `.claude/settings.json`) runs `setup-hooks.sh`
+  automatically on every remote session, plus recreates `.venv` and installs the dev/highs extras
+  so `pytest`/`ruff`/`mypy` work immediately — closing the actual gap that let the bad-identity
+  commits happen in the first place (nothing wired hooks for a fresh checkout). **This only
+  prevents *future* recurrence**, and only once merged to `main`'s default branch (a `SessionStart`
+  hook has no effect until then) — it does not retroactively fix the 5 commits above.
+- **Branch protection: not evaluated.** Whether `gates` should become a *required* status check
+  (so a red run can't be merged past at all, closing the other half of the gap) is a GitHub
+  repo-settings decision for the owner, not made in this session.
 - **`specs/engine_spec/` cross-references:** the 6,500-line spec set was copied
   verbatim from `QR-Haven` and still describes some things in monorepo terms
   (e.g. "the parent repository", the `qr_haven` platform adapter living
