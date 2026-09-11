@@ -1,0 +1,17 @@
+#!/bin/sh
+# pre-push hook for InventoryBallast: scan the actual range about to be
+# pushed for AI-agent authorship, mirroring what CI's own gates job checks
+# (.github/workflows/ci.yml's agent-attribution step) -- catching it here
+# means a bad commit never reaches GitHub at all, instead of failing CI after
+# the fact and needing a human to notice and override or fix it.
+#
+# No QF_ATTRIB_RANGE override: hooks/stages/agent-attribution-check.sh's own
+# default ("origin/main..HEAD" when it resolves, else "HEAD~20..HEAD") scans
+# only commits ahead of origin/main -- so this never re-flags history already
+# merged into main (which this repo cannot rewrite; see docs/handoff.md).
+
+set -e
+ROOT_DIR=$(git rev-parse --show-toplevel)
+cd "$ROOT_DIR"
+
+QF_STAGE_ENFORCE=1 sh hooks/stages/run-stage.sh agent-attribution

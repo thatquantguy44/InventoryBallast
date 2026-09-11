@@ -1,0 +1,21 @@
+#!/bin/sh
+# commit-msg hook for InventoryBallast: refuse a commit message carrying an
+# AI co-author trailer (CLAUDE.md's "GitHub posts" policy extended to commits
+# themselves -- attribution belongs to the human accountable for the work).
+#
+# This regex is kept in sync by hand with hooks/stages/agent-attribution-
+# check.sh's own AGENT_TRAILER_RE -- duplicated rather than sourced because
+# this hook must run standalone on a message file that is not yet a commit
+# (there is no range or commit object for the shared script's own logic to
+# inspect yet).
+
+MSG_FILE="$1"
+
+AGENT_TRAILER_RE='^[[:space:]]*Co-[Aa]uthored-[Bb]y:.*(Claude|Codex|ChatGPT|Copilot|anthropic\.com|openai\.com)|^[[:space:]]*(Claude|Codex)-Session:|Generated with \[(Claude Code|Codex)\]'
+
+if grep -qE "$AGENT_TRAILER_RE" "$MSG_FILE"; then
+  echo "Refusing commit: message carries an AI co-author trailer." >&2
+  echo "Commits here are attributed to the human accountable for them." >&2
+  echo "Remove the trailer and commit again." >&2
+  exit 1
+fi
