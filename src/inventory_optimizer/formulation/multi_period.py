@@ -35,11 +35,16 @@ recorded here rather than guessed silently (constitution P8):**
    behavior) rather than expressing a genuine variable-relative constraint -- deferred, not
    silently dropped.
 
-Not built here (later tasks): the discounted objective (T-009,
-``components/objective_terms/multi_period_economics.py``) and ``compile_multi_period_lp``/
-``solve_multi_period`` (T-010), which will call ``build_multi_period_context``/
-``build_multi_period_variable_index``/``contribute_all_periods`` from this module plus T-009's
-objective term to assemble one ``CompiledProblem`` and solve it.
+``compile_multi_period_lp``/``solve_multi_period`` (T-010, this module's own bottom section) tie
+T-007 (``formulation.compiler_support.multi_period_conflict_issues``) through T-009
+(``components.objective_terms.multi_period_economics.contribute_multi_period_objective``)
+together into one ``CompiledProblem`` and, for ``solve_multi_period``, a solved
+``domain.settlement.MultiPeriodProjection`` (``mode="jointly_optimized"``) -- a new, separate entry
+point deliberately not folded into ``facade.InventoryOptimizer.optimize()``'s existing dispatch
+(REQ-012; see this module's ``solve_multi_period`` docstring for why). ``facade.py`` is untouched by
+this spec entirely, including its private ``_resolve_backend``/``_solver_options_from_config``
+helpers -- this module carries its own small, intentionally duplicated equivalents rather than
+importing them, so nothing here ever has to touch that file.
 """
 
 from __future__ import annotations
@@ -51,19 +56,43 @@ from dataclasses import dataclass
 from datetime import date
 from typing import TypeVar
 
-from inventory_optimizer.config.models import ElasticityConfig, InventoryOptimizerConfig
-from inventory_optimizer.domain.enums import TradeEventType
+import numpy as np
+from numpy.typing import NDArray
+
+from inventory_optimizer.components.objective_terms.fee_revenue import fee_revenue_coefficient
+from inventory_optimizer.components.objective_terms.multi_period_economics import (
+    contribute_multi_period_objective,
+    period_discount_factor,
+    period_tau,
+)
+from inventory_optimizer.config.models import (
+    ElasticityConfig,
+    InventoryOptimizerConfig,
+    SolverConfig,
+)
+from inventory_optimizer.domain.enums import Formulation, ObjectiveSense, TradeEventType
 from inventory_optimizer.domain.inventory import SecurityInventory
 from inventory_optimizer.domain.loans import LoanRoute
 from inventory_optimizer.domain.policies import CounterpartyLimit, UtilizationPolicy
 from inventory_optimizer.domain.requests import OptimizationRequest
 from inventory_optimizer.domain.scenarios import TradeEvent
+from inventory_optimizer.domain.settlement import (
+    MultiPeriodProjection,
+    PeriodBalance,
+    PeriodEconomics,
+    disclosure_for_mode,
+)
 from inventory_optimizer.elasticity import EvaluatedDemand, evaluate_demand_cap
-from inventory_optimizer.exceptions import InputValidationError, ValidationIssue
+from inventory_optimizer.exceptions import ConfigurationError, InputValidationError, ValidationIssue
+from inventory_optimizer.formulation.compiled import CompiledProblem
+from inventory_optimizer.formulation.compiler_support import multi_period_conflict_issues
 from inventory_optimizer.formulation.indexes import VariableIndex, VariableKey
 from inventory_optimizer.formulation.sparse_builder import SparseBuilder
 from inventory_optimizer.formulation.variables import build_variable_index
+from inventory_optimizer.ports.solver import SolverBackend, SolverOptions, SolverResult
 from inventory_optimizer.scenarios.apply import select_effective_events
+from inventory_optimizer.validation import raise_if_invalid
+from inventory_optimizer.validation.solution_verifier import verify_solution
 
 T = TypeVar("T")
 
@@ -562,3 +591,213 @@ def contribute_all_periods(context: MultiPeriodContext, builder: SparseBuilder) 
     """Every period's constraints, period 0 through N, in period order."""
     for period_index in range(context.period_count):
         contribute_period_constraints(context, builder, period_index)
+
+
+# ---------------------------------------------------------------------------------------------
+# T-010: compile_multi_period_lp / solve_multi_period -- the new, separate entry point (REQ-012).
+# ---------------------------------------------------------------------------------------------
+
+
+def _resolve_backend(solver_config: SolverConfig) -> SolverBackend:
+    """A small, intentionally duplicated equivalent of ``facade._resolve_backend`` -- this module's
+    own docstring explains why ``facade.py`` is never imported from here. Lazily imports
+    ``solvers.highs`` for the same reason the original does: ``highspy`` is an optional extra, not
+    a hard dependency of ``inventory_optimizer`` itself."""
+    if solver_config.backend == "highs":
+        try:
+            from inventory_optimizer.solvers.highs import HighsBackend
+        except ImportError as exc:
+            raise ConfigurationError(
+                "solver backend 'highs' requires the 'highs' extra (pip install -e '.[highs]')"
+            ) from exc
+        return HighsBackend()
+    raise ConfigurationError(f"unregistered solver backend: {solver_config.backend!r}")
+
+
+def _solver_options_from_config(solver_config: SolverConfig) -> SolverOptions:
+    return SolverOptions(
+        time_limit_seconds=solver_config.time_limit_seconds,
+        relative_gap=solver_config.relative_gap,
+        threads=solver_config.threads,
+        seed=solver_config.seed,
+        log_level=solver_config.log_level,
+    )
+
+
+def _require_planning_periods(request: OptimizationRequest, *, caller: str) -> None:
+    """Empty ``planning_periods`` is a caller error here (there is nothing to compile/solve) --
+    the same convention ``settlement.project.project_multi_period`` already established for its
+    own Phase 1 entry point."""
+    if not request.planning_periods:
+        raise ValueError(
+            f"{caller} requires a non-empty planning_periods (request_id={request.request_id!r})"
+        )
+
+
+def _compile_from_context(context: MultiPeriodContext) -> CompiledProblem:
+    variable_index = build_multi_period_variable_index(context.request)
+    builder = SparseBuilder(variable_index)
+    contribute_all_periods(context, builder)
+    contribute_multi_period_objective(context, builder)
+    return builder.build(formulation=Formulation.LP, objective_sense=ObjectiveSense.MAXIMIZE)
+
+
+def compile_multi_period_lp(
+    request: OptimizationRequest, config: InventoryOptimizerConfig
+) -> CompiledProblem:
+    """REQ-009 through REQ-012's joint LP compiler, standalone -- mirrors ``formulation.lp.
+    compile_lp``'s own independent existence. Fails closed (``InputValidationError``) exactly like
+    ``compile_lp`` does for its own MIP/QP triggers if the request combines ``planning_periods``
+    with a MIP/QP/fee-tier trigger (``multi_period_conflict_issues``, T-007)."""
+    _require_planning_periods(request, caller="compile_multi_period_lp")
+    issues = multi_period_conflict_issues(request, config)
+    if issues:
+        raise InputValidationError(issues)
+    context = build_multi_period_context(request, config)
+    return _compile_from_context(context)
+
+
+def _primal_at(
+    primal: NDArray[np.float64],
+    variable_index: VariableIndex,
+    kind: str,
+    base_id: str,
+    period_index: int,
+) -> float:
+    key = period_variable_key(kind, base_id, period_index)
+    return float(primal[variable_index.position(key)])
+
+
+def _build_projection(
+    context: MultiPeriodContext, variable_index: VariableIndex, result: SolverResult
+) -> MultiPeriodProjection:
+    """Builds the ``mode="jointly_optimized"`` counterpart to ``settlement.project.
+    project_multi_period``'s ``mode="projected"`` -- same result type, same per-period balance/
+    economics shape, but every value read from the joint LP's own solved primal rather than
+    mechanically applied to a settled snapshot. ``on_loan_shares``/``available_to_lend_shares``
+    follow ``reporting.result_builder._build_balances``'s own convention exactly: sum the solved
+    ``q`` variables for the on-loan quantity, and trust the solved ``a`` variable directly for
+    availability, rather than re-deriving either from the row's own RHS."""
+    assert result.primal is not None
+    primal = result.primal
+    request = context.request
+
+    balances: list[PeriodBalance] = []
+    economics: list[PeriodEconomics] = []
+    total_discounted = 0.0
+
+    for period_index, boundary in enumerate(context.boundaries):
+        for inventory in request.inventory:
+            lendable = _period_lendable(inventory, context.adjustments, period_index)
+            on_loan = sum(
+                _primal_at(primal, variable_index, "q", route.route_id, period_index)
+                for route in context.routes_by_inventory.get(inventory.inventory_id, ())
+            )
+            available = _primal_at(
+                primal, variable_index, "a", inventory.inventory_id, period_index
+            )
+            utilization = on_loan / lendable if lendable > 0.0 else 0.0
+            balances.append(
+                PeriodBalance(
+                    inventory_id=inventory.inventory_id,
+                    period_index=period_index,
+                    period_date=boundary,
+                    total_lendable_shares=lendable,
+                    on_loan_shares=on_loan,
+                    available_to_lend_shares=available,
+                    utilization=utilization,
+                )
+            )
+
+        tau = period_tau(context.config, context.boundaries, period_index)
+        discount = period_discount_factor(context.config, context.boundaries, period_index)
+        undiscounted = 0.0
+        for route in request.routes:
+            inventory = context.inventory_by_id[route.inventory_id]
+            coefficient = fee_revenue_coefficient(
+                route, inventory, context.config.formulation, day_count_fraction=tau
+            )
+            q = _primal_at(primal, variable_index, "q", route.route_id, period_index)
+            inc = _primal_at(primal, variable_index, "inc", route.route_id, period_index)
+            dec = _primal_at(primal, variable_index, "dec", route.route_id, period_index)
+            undiscounted += (
+                coefficient * q
+                - route.increase_cost_usd_per_share * inc
+                - route.decrease_cost_usd_per_share * dec
+            )
+        discounted = undiscounted * discount
+        economics.append(
+            PeriodEconomics(
+                period_index=period_index,
+                period_date=boundary,
+                day_count_fraction=tau,
+                undiscounted_net_revenue_usd=undiscounted,
+                discount_factor=discount,
+                discounted_net_revenue_usd=discounted,
+            )
+        )
+        total_discounted += discounted
+
+    return MultiPeriodProjection(
+        request_id=request.request_id,
+        mode="jointly_optimized",
+        status=result.status,
+        planning_periods=request.planning_periods,
+        balances=tuple(balances),
+        economics=tuple(economics),
+        total_discounted_net_revenue_usd=total_discounted,
+        warnings=(),
+        disclosure=disclosure_for_mode("jointly_optimized"),
+    )
+
+
+def solve_multi_period(
+    request: OptimizationRequest,
+    config: InventoryOptimizerConfig,
+    *,
+    backend: SolverBackend | None = None,
+) -> MultiPeriodProjection:
+    """REQ-012's new, separate entry point -- a caller uses this instead of ``facade.
+    InventoryOptimizer.optimize()`` when it wants the jointly-optimized answer.
+    ``InventoryOptimizer.optimize()`` itself never reads ``planning_periods`` and always
+    compiles/solves period 0 alone: Phase 1's own ``settlement.project.project_multi_period``
+    *requires* that (its own period-0 starting state is that period-0-only ``OptimizationResult``),
+    so this module never folds into ``optimize()``'s dispatch and ``facade.py`` stays untouched.
+
+    Composes the same stages ``optimize()`` does, in the same order (validate -> compile -> solve
+    -> verify -> build a result), without touching ``facade.py``: ``validation.raise_if_invalid``
+    (the same request-level checks every request gets, including T-002's recall-notice check) ->
+    ``multi_period_conflict_issues`` (T-007, this joint LP's own MIP/QP/fee-tier exclusion) ->
+    ``compile_multi_period_lp`` -> the resolved ``SolverBackend.solve`` -> ``validation.
+    solution_verifier.verify_solution`` -> this module's own ``_build_projection``.
+
+    Mirrors ``settlement.project.project_multi_period``'s own honest-status contract (NFR-004):
+    a no-feasible-primal result returns an empty ``MultiPeriodProjection`` carrying the solver's
+    own status and a warning, rather than raising.
+    """
+    _require_planning_periods(request, caller="solve_multi_period")
+    raise_if_invalid(request, max_staleness_hours=config.validation.max_staleness_hours)
+    issues = multi_period_conflict_issues(request, config)
+    if issues:
+        raise InputValidationError(issues)
+
+    context = build_multi_period_context(request, config)
+    problem = _compile_from_context(context)
+    resolved_backend = backend if backend is not None else _resolve_backend(config.solver)
+    result = resolved_backend.solve(problem, _solver_options_from_config(config.solver))
+    verification = verify_solution(problem, result)
+
+    if not verification.has_primal:
+        return MultiPeriodProjection(
+            request_id=request.request_id,
+            mode="jointly_optimized",
+            status=result.status,
+            planning_periods=request.planning_periods,
+            balances=(),
+            economics=(),
+            total_discounted_net_revenue_usd=0.0,
+            warnings=("no feasible primal in the joint multi-period LP; result not produced",),
+            disclosure=disclosure_for_mode("jointly_optimized"),
+        )
+
+    return _build_projection(context, problem.variable_index, result)

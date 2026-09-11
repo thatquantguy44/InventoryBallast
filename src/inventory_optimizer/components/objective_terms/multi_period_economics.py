@@ -31,14 +31,29 @@ economics by construction, not by coincidence, since both start from the same re
 from __future__ import annotations
 
 from datetime import date
+from typing import TYPE_CHECKING
 
 from inventory_optimizer.components.objective_terms.fee_revenue import (
     DAY_COUNT_DIVISOR,
     fee_revenue_coefficient,
 )
 from inventory_optimizer.config.models import InventoryOptimizerConfig
-from inventory_optimizer.formulation.multi_period import MultiPeriodContext, period_variable_key
+from inventory_optimizer.formulation.indexes import VariableKey
 from inventory_optimizer.formulation.sparse_builder import SparseBuilder
+
+if TYPE_CHECKING:  # pragma: no cover - typing only, avoids a formulation.multi_period <-> here
+    # import cycle: formulation.multi_period (T-010) imports contribute_multi_period_objective
+    # from this module to build the joint LP's objective row, so this module cannot import
+    # formulation.multi_period back at runtime.
+    from inventory_optimizer.formulation.multi_period import MultiPeriodContext
+
+_PERIOD_SEPARATOR = "@"
+
+
+def _period_variable_key(kind: str, base_id: str, period_index: int) -> VariableKey:
+    """A private duplicate of ``formulation.multi_period.period_variable_key`` (same formula,
+    not importable here -- see the ``TYPE_CHECKING`` note above)."""
+    return VariableKey(kind=kind, scope_id=f"{base_id}{_PERIOD_SEPARATOR}{period_index:03d}")
 
 
 def period_tau(
@@ -73,14 +88,14 @@ def contribute_period_objective(
             route, inventory, context.config.formulation, day_count_fraction=tau
         )
         builder.add_objective_coefficient(
-            period_variable_key("q", route.route_id, period_index), discount * coefficient
+            _period_variable_key("q", route.route_id, period_index), discount * coefficient
         )
         builder.add_objective_coefficient(
-            period_variable_key("inc", route.route_id, period_index),
+            _period_variable_key("inc", route.route_id, period_index),
             -discount * route.increase_cost_usd_per_share,
         )
         builder.add_objective_coefficient(
-            period_variable_key("dec", route.route_id, period_index),
+            _period_variable_key("dec", route.route_id, period_index),
             -discount * route.decrease_cost_usd_per_share,
         )
 
