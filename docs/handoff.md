@@ -533,6 +533,51 @@ Excel workbooks (the QuantSmith dashboard surfaces were already evaluated and
 parked — see below), narrative prose summaries, any new derived metric, and a
 redundant `json_io.py` wrapper around what Pydantic already does.
 
+### Bloomberg-enriched realism, Realism release R0 (`01_SPEC.md` §22.2-§22.4; T19-T21) — proposed, pending owner sign-off (2026-09-14)
+
+`specs/0011-bloomberg-data-foundation/` (`spec.md`, `plan.md`, `tasks.md`) — drafted 2026-09-14 in
+direct response to the owner's instruction to start the Bloomberg-enriched realism workstream (the
+first of the two post-Phase-5 workstreams named below). **No code has been written; `spec.md`'s
+Status is `Proposed`, not `Approved`.**
+
+Scope: exactly T19-T21, which `01_SPEC.md` §26's task matrix calls "required realism release R0."
+This is the correct starting slice regardless of §22.15's own text calling R1 "the recommended
+first realism release," because R1's own tasks (T22-T24) each depend on T19/T20 — R0 is a hard
+prerequisite, not a preference. R0 stays "Validation only"/"LP bounds/RHS"/"Data architecture"
+impact per §22.15 — no new objective term, no economic coefficient, matching this repo's practice
+of never modeling economics without a calibration source behind them.
+
+What it builds: point-in-time contracts (`PointInTimeValue[T]`, `SecurityReference`,
+`MarketCalendar`, `CorporateActionEvent`); the two R0 ports (`reference_data`,
+`corporate_actions`) as vendor-agnostic `Protocol`s; a **synthetic, fixture-backed** Bloomberg
+adapter (`adapters/bloomberg/`) — no real vendor SDK call anywhere, since this repo has no
+Bloomberg entitlement or confirmed field catalog, exactly the precondition `01_SPEC.md` §22.1
+itself names; an as-of resolution join preventing look-ahead; security-master reconciliation that
+fails closed (never silently overrides an internal value) on conflict; opt-in pre-solve validation
+for halted/suspended/delisted securities and invalid settlement dates; and closes a gap
+`specs/0010-multi-period-settlement/`'s own handoff entry named explicitly ("no calendar port
+exists anywhere in this repo") by wiring an optional calendar into `settlement/project.py`/
+`formulation/multi_period.py`, byte-identical to `0010`'s existing behavior when no calendar is
+supplied.
+
+**Three open questions block implementation start**, all requiring real owner judgment (the same
+pattern `0009`/`0010` used before their own implementation began) — see `spec.md`'s Assumptions &
+Open Questions and `plan.md`'s Open Questions for full context:
+
+1. Is a fully synthetic adapter (no real Bloomberg SDK call anywhere) an acceptable *complete*
+   deliverable for this spec, given entitlements/field catalog are unconfirmed?
+2. What exactly counts as a "new route" for the halted-security validation check (candidate:
+   `current_quantity_shares == 0` in the incoming request)?
+3. Should the calendar/status checks be hard validation failures or warnings, given today's
+   calendars and statuses are entirely synthetic fixtures, not real market data?
+
+Explicitly **not** in this spec's scope (tracked as follow-ups): a real vendor-SDK-backed adapter;
+R1 economics (legal-entity aggregation, take-up/survival/repricing hazards, liquidity buffers —
+T22-T24); full corporate-action economics beyond timing/status (§22.8's cash-flow/quantity-
+transformation/election handling); `MarketState`/`LiquidityEstimate`/`FundHolding`/event-regime
+features; and the separate, unrelated DocumentRefinery/eligibility-collateral track described
+below (T29-T32) — same bitemporal pattern, different data domain, no shared dependency.
+
 ### Possible spec idea: schedules/collateral (T29-T32) via DocumentRefinery — not scoped, not started
 
 `SCH-001`–`SCH-004` (T29, schedule resolution) and `COL-001`–`COL-004`
@@ -653,17 +698,14 @@ settlement, both designs) are all done** (2026-09-04, 2026-09-05 ×5,
 `main` on GitHub (`thatquantguy44/InventoryBallast` — see "Open items" below;
 the remote no longer needs creating).
 
-**Next up: nothing in the engine spec's own phase sequence is scoped yet.**
-Per `00_PLAN.md`, after Phase 5 the two remaining workstreams are the
-Bloomberg-enriched realism track (§22, `DAT-*` rows, all `SPECIFIED`) and the
-agency/prime desk track (§23, `AGY-*`/`PRM-*` rows, all `SPECIFIED`) — neither
-has a `specs/NNNN-*` directory yet. The "Possible spec idea: schedules/
-collateral (T29-T32) via DocumentRefinery" section above is the most
-concretely scoped candidate among them, but is explicitly flagged as an idea,
-not a plan, pending DocumentRefinery's own Phase 4 (CSA/lending-fee schedules)
-maturing. Bring a real desk need to the owner before starting any of these —
-none has the kind of "spec already says exactly what to build" grounding that
-made `0009`/`0010` straightforward once approved.
+**Next up: `specs/0011-bloomberg-data-foundation/` is drafted (Proposed, 2026-09-14) but not yet
+approved or implemented — resolve its three open questions first.** Per `00_PLAN.md`, after Phase 5
+the two remaining workstreams are the Bloomberg-enriched realism track (§22, `DAT-*` rows, all
+`SPECIFIED`) and the agency/prime desk track (§23, `AGY-*`/`PRM-*` rows, all `SPECIFIED`). The
+Bloomberg track now has its first `specs/NNNN-*` directory (see above); the agency/prime desk track
+still has none. The "Possible spec idea: schedules/collateral (T29-T32) via DocumentRefinery"
+section below is a separate, still-unscoped candidate, pending DocumentRefinery's own Phase 4
+(CSA/lending-fee schedules) maturing.
 
 **Also worth doing, lower stakes than a new phase:** `docs/adoption_guide.md`
 step 6 was finally wired in this repo (`.githooks/`, `setup-hooks.sh`, a
@@ -674,23 +716,33 @@ this closed and the one it didn't.
 
 - **GitHub remote: exists now.** `thatquantguy44/InventoryBallast`, created around 2026-09-09.
   `main` has real history via merged PRs (#1 Phase 1, #2 a docs rename, #3-#4 Phase 2, #5 the git
-  hooks below); CI runs for real on every push/PR.
+  hooks below, #6 T-014 close-out, #7 a content-no-op merge — see the CI bullet below for why it
+  still matters); CI runs for real on every push/PR, and `main` is now branch-protected (see
+  below).
 - **`quantsmith` pin:** `requirements.txt` and `pyproject.toml`'s `agentic` extra
   pin `quantsmith @ git+...@3951654f56c995465b4c090f39eeb34f8c9671ff` — the exact
   `origin/main` commit at adoption time, because QuantSmith has no tagged release
   yet. Re-pin to a tag once one exists.
-- **CI runs for real now — and it caught a real gap.** `.github/workflows/ci.yml`'s `gates` job
-  (spec/spec-index/agent-catalog/pipeline-contract/secret-scan/`agent-attribution`, all
+- **CI runs for real now — and it caught a real gap, twice.** `.github/workflows/ci.yml`'s `gates`
+  job (spec/spec-index/agent-catalog/pipeline-contract/secret-scan/`agent-attribution`, all
   `QF_STAGE_ENFORCE=1`) and `tests` job both run on every push/PR. The `tests` job has been green
   throughout. **The `agent-attribution` check failed on PRs #3 and #4** — a remote agent session's
   own git identity was `Claude <noreply@anthropic.com>` (the execution environment's default, not
   something anyone configured on purpose), and both PRs were merged by the owner despite the
-  failing check (i.e. `gates` is not currently a *required* status check in branch protection — it
-  reports, it doesn't block). **`main` now permanently carries 5 commits with this bad identity**
-  (all of spec 0010 Phase 2's own commits: T-008 through T-013) — rewriting them would mean
-  rewriting `main` itself, a materially bigger operation than anything attempted so far, and
-  deliberately not done without a separate, explicit decision to do it. This is a known, disclosed
-  wart in `main`'s own history, not a hidden one.
+  failing check. **`main` permanently carries 5 commits with this bad identity** (all of spec
+  0010 Phase 2's own commits: T-008 through T-013) — rewriting them would mean rewriting `main`
+  itself, a materially bigger operation than anything attempted so far, and deliberately not done
+  without a separate, explicit decision to do it. This is a known, disclosed wart in `main`'s own
+  history, not a hidden one. **It recurred a third time on 2026-09-12**: PR #7 (branch
+  `0010-multi-period-settlement`, merged as `45904a9`) carried a commit (`e030efe`) with a
+  `Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>` trailer — a different failure mode
+  (trailer, not author identity) from the same root cause (a session-level attribution default
+  overriding this repo's own `CLAUDE.md` rule). Verified content-harmless (`git diff
+  3866c9c..45904a9` is empty — the merge resolved to zero net tree changes; full suite still 275
+  passed/2 skipped), but `gates` failed on that merge's own CI run, and that failure was **not**
+  blocked from merging because branch protection did not yet exist at merge time — see the next
+  bullet, added in direct response to this recurrence. `main` now has 6 total commits carrying
+  some form of AI attribution CI was designed to catch.
 - **Local Git hooks: now wired (2026-09-11), closing half the gap above.** Per
   `docs/adoption_guide.md` step 6 in the QuantSmith SDK repo ("wire the gates into your own hooks,
   skip `.githooks/`" — the SDK's own `.githooks/`/`setup-hooks.sh` enforce SDK-repo invariants, not
@@ -699,13 +751,18 @@ this closed and the one it didn't.
   identity rather than only reporting it after the fact in CI. A Claude Code `SessionStart` hook
   (`.claude/hooks/session-start.sh`, registered in `.claude/settings.json`) runs `setup-hooks.sh`
   automatically on every remote session, plus recreates `.venv` and installs the dev/highs extras
-  so `pytest`/`ruff`/`mypy` work immediately — closing the actual gap that let the bad-identity
-  commits happen in the first place (nothing wired hooks for a fresh checkout). **This only
-  prevents *future* recurrence**, and only once merged to `main`'s default branch (a `SessionStart`
-  hook has no effect until then) — it does not retroactively fix the 5 commits above.
-- **Branch protection: not evaluated.** Whether `gates` should become a *required* status check
-  (so a red run can't be merged past at all, closing the other half of the gap) is a GitHub
-  repo-settings decision for the owner, not made in this session.
+  so `pytest`/`ruff`/`mypy` work immediately. **This only prevents recurrence in a session that
+  actually runs the hook** (PR #7's session apparently didn't, or bypassed it) — it does not
+  retroactively fix the 6 commits above, and doesn't stop a red `gates` run from being merged
+  regardless (see next bullet).
+- **Branch protection: now enabled (2026-09-12), closing the other half of the gap.** In direct
+  response to PR #7's recurrence above, `main` now requires `gates` and `tests` to pass (`strict`
+  mode — the branch must be up to date with `main` before merging) via
+  `PUT /repos/thatquantguy44/InventoryBallast/branches/main/protection`, with `enforce_admins:
+  true` (no owner bypass) and force-pushes/branch deletion disabled on `main`. A red `gates` run —
+  including a future attribution-trailer/identity violation — can no longer be merged past at all,
+  by anyone. This does not touch the 6 already-merged offending commits (still a disclosed wart,
+  per the bullet above) — it only closes the gate going forward.
 - **`specs/engine_spec/` cross-references:** the 6,500-line spec set was copied
   verbatim from `QR-Haven` and still describes some things in monorepo terms
   (e.g. "the parent repository", the `qr_haven` platform adapter living
