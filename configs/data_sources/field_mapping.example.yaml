@@ -1,0 +1,30 @@
+# Example field-mapping configuration (Section 22.2). Illustrative only: every mnemonic below is a
+# generic, made-up placeholder, never a real proprietary Bloomberg field code -- REQ-009/NFR-004.
+# adapters/bloomberg/field_mapping.py loads a file matching this schema and stamps its own
+# `version` onto every PointInTimeValue it produces (a value's field_mapping_version).
+version: "1"
+concepts:
+  security_reference.trading_status:
+    mnemonic: "EXAMPLE_TRADING_STATUS"
+    unit: null
+    null_policy: "reject"
+    effective_time_field: "EXAMPLE_STATUS_EFFECTIVE_DATE"
+    entitlement_id: "example-entitlement-refdata"
+  security_reference.primary_market:
+    mnemonic: "EXAMPLE_PRIMARY_EXCHANGE"
+    unit: null
+    null_policy: "reject"
+    effective_time_field: "EXAMPLE_STATUS_EFFECTIVE_DATE"
+    entitlement_id: "example-entitlement-refdata"
+  market_calendar.settlement_holidays:
+    mnemonic: "EXAMPLE_SETTLEMENT_HOLIDAYS"
+    unit: null
+    null_policy: "empty"
+    effective_time_field: "EXAMPLE_CALENDAR_EFFECTIVE_DATE"
+    entitlement_id: "example-entitlement-calendar"
+  corporate_action_event.status:
+    mnemonic: "EXAMPLE_CORP_ACTION_STATUS"
+    unit: null
+    null_policy: "reject"
+    effective_time_field: "EXAMPLE_ANNOUNCEMENT_DATE"
+    entitlement_id: "example-entitlement-events"

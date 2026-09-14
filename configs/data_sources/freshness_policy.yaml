@@ -1,0 +1,6 @@
+# Example freshness policy (Section 22.2, 22.4). Illustrative only; not read by any code in R0 --
+# R0 builds the point-in-time resolution primitive (enrichment.point_in_time) that a freshness
+# policy would sit on top of, but wiring a policy file into it is left to a later spec once real
+# staleness SLAs exist for a real adapter.
+version: "1"
+default_max_staleness: "PT24H"

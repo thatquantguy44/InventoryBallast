@@ -1,14 +1,18 @@
 # Plan: Bloomberg data foundation (Realism release R0)
 
 - **Spec:** 0011-bloomberg-data-foundation (`spec.md`)
-- **Status:** Draft — blocked on spec approval and the three open questions in `spec.md`'s
-  Assumptions & Open Questions
+- **Status:** Approved
 - **Author:** Joshua Lutkemuller, CFA (drafted by Claude Code)
 - **Last updated:** 2026-09-14
 
 > HOW. This plan requires an approved `spec.md`. Every requirement in the spec must appear in the
-> traceability matrix below. Do not start T-001 in `tasks.md` until `spec.md`'s Status is
-> `Approved`.
+> traceability matrix below.
+
+**Resolved (2026-09-14):** synthetic-only adapter confirmed sufficient; REQ-012/REQ-013 are
+non-blocking warnings, not hard failures (this changes the Validation wiring section below
+materially from its original hard-fail sketch); REQ-012's "new route" definition
+(`current_quantity_shares == 0`) is adopted as a V0 default despite the owner calling it
+uncertain — see `spec.md`'s RISK-003.
 
 ## Approach
 
@@ -281,27 +285,57 @@ since the two check different things (environment/config vs. one specific vendor
 firm without Bloomberg entitlements at all should not see Bloomberg-shaped output from its plain
 `doctor` call.
 
-## Validation wiring (REQ-012, REQ-013, REQ-014)
+## Validation wiring (REQ-012, REQ-013, REQ-014) — warnings, not hard failures
 
-Both checks are **new, optional keyword parameters** threaded through the existing validation entry
-points — not new required inputs, and not a change to any existing function's positional signature:
+**Revised per the owner's 2026-09-14 decision.** These checks return `tuple[str, ...]` warnings,
+following `scenarios.apply.apply_events`'s existing convention (accumulate a `list[str]`, return a
+`tuple`) — not `ValidationIssue`/`InputValidationError`, which stays reserved for genuinely blocking
+Section 9.8 invariants. Both live in `validation/reconciliation.py` as **new, optional keyword
+parameters**, not new required inputs, and not a change to any existing function's positional
+signature:
 
-- `validation.reconciliation.check_security_tradability(request, references: Mapping[str,
-  PointInTimeValue[SecurityReference]] = {})` — for each route in the request whose
-  `current_quantity_shares == 0` (a genuinely new route — see `spec.md`'s open question on this
-  exact definition) referencing a security present in `references` with `trading_status` in
-  `{HALTED, SUSPENDED, DELISTED}`, emit a `ValidationIssue`. Absent `references`, this returns no
-  issues ever — the parameter defaults to an empty mapping, so every existing call site needs zero
-  changes (NFR-001).
-- `validation.reconciliation.check_settlement_calendar(dates_and_markets, calendars: Mapping[str,
-  MarketCalendar] = {})` — analogous: only markets present in `calendars` are checked; every other
-  market's dates pass through unchecked, exactly as today.
+```python
+def check_security_tradability(
+    request: OptimizationRequest,
+    references: Mapping[str, PointInTimeValue[SecurityReference]] = {},
+) -> tuple[str, ...]:
+    """REQ-012: a route with current_quantity_shares == 0 (the adopted, owner-flagged-uncertain
+    V0 'new route' definition -- spec.md RISK-003) for a security whose resolved status is
+    HALTED/SUSPENDED/DELISTED produces one warning naming the route and status. Absent
+    `references`, always returns (). Never raises."""
+
+def check_settlement_calendar(
+    dates_and_markets: Sequence[tuple[date, str]],
+    calendars: Mapping[str, MarketCalendar] = {},
+) -> tuple[str, ...]:
+    """REQ-013: one warning per (date, market) pair where `market` is present in `calendars` and
+    the date is not `is_settlement_day`. Absent `calendars`, or for a market not present in it,
+    always contributes no warning for that pair. Never raises."""
+```
+
+Callers:
+
+- `facade.InventoryOptimizer.optimize()` gains `security_references: Mapping[str,
+  PointInTimeValue[SecurityReference]] = {}` and (for symmetry, though REQ-014 is the multi-period
+  path's own concern) no calendar parameter — a single-period `optimize()` call has no period dates
+  to check beyond `request.as_of`, which `check_freshness` already covers. After the existing
+  five-stage pipeline produces `result`, `optimize()` computes `extra_warnings =
+  check_security_tradability(request, security_references)` and returns
+  `result.model_copy(update={"warnings": result.warnings + extra_warnings})` when non-empty,
+  otherwise `result` unchanged — zero cost, zero new object identity churn, when the mapping is
+  empty (NFR-001).
 - `settlement.project.project_multi_period` and `formulation.multi_period.solve_multi_period` each
   gain `calendars: Mapping[str, MarketCalendar] | None = None`. When `None` (the default), every
-  period date is accepted exactly as `specs/0010-multi-period-settlement/` already does — this is
-  the byte-identical path REQ-014/AC-007 require. When supplied, each period's date is checked via
-  `check_settlement_calendar` before the projection/compile proceeds, failing closed with the same
-  structured-issue mechanism `0010` already uses for `check_recall_notice_sufficiency`.
+  period date is accepted exactly as `specs/0010-multi-period-settlement/` already does — the
+  byte-identical path REQ-014/AC-007 require. When supplied, each period boundary date is checked
+  via `check_settlement_calendar`, keyed by **currency** (recorded simplification: neither
+  `SecurityInventory` nor `LoanRoute` carries a "market" field today, only `currency`; a real
+  market/calendar key can replace this once `SecurityReference.primary_market` enrichment is
+  actually threaded through these two modules, which this spec does not attempt — that is a bigger
+  change than REQ-014's scope), and the resulting warnings are appended to the already-existing
+  `warnings` accumulation each module already threads through to its `MultiPeriodProjection`
+  (`project_multi_period`'s existing `all_warnings` list; `solve_multi_period`'s
+  `_build_projection`, which currently hard-codes `warnings=()` and gains the same accumulation).
 
 ## Constitution Check
 
@@ -354,11 +388,11 @@ points — not new required inputs, and not a change to any existing function's 
   be exactly the kind of undocumented policy the constitution forbids ("a preference must not be
   disguised as a hard rule" — §22.16's own constraint-inclusion rule 2, applied here to data
   policy rather than a model constraint). Tracked as a follow-up.
-- **Hard-fail calendar/status validation vs. a warning.** Raised explicitly as an open question
-  rather than decided; the plan assumes hard-fail (matching this repo's existing fail-closed
-  convention for every other validation surface) but flags that today's calendars are entirely
-  synthetic, so a hard failure could reject a request based on fixture data nobody has reviewed for
-  a real market. The owner's answer changes REQ-012/REQ-013's implementation, not their existence.
+- **Hard-fail calendar/status validation vs. a warning.** **Resolved by the owner (2026-09-14):
+  warnings.** This departs from this repo's usual fail-closed default for validation, but correctly
+  reflects that today's calendars/statuses are entirely synthetic fixtures, not real market data —
+  hard-failing on unreviewed fixture data would be a worse default than surfacing it for review. A
+  later spec, once real data backs these checks, may promote either to a hard failure.
 
 ## Validation Strategy
 
@@ -400,10 +434,7 @@ the look-ahead guard is ever removed by accident.
 
 ## Open Questions
 
-See `spec.md`'s Assumptions & Open Questions — all three are repeated here because they gate
-`tasks.md`'s start, not because they are new:
-
-1. Is a fully synthetic adapter an acceptable complete deliverable for R0?
-2. What exactly counts as a "new route" for REQ-012's halted-security check?
-3. Should REQ-013/REQ-012 be hard failures or warnings, given today's calendars/statuses are
-   entirely synthetic?
+All three resolved by the owner (2026-09-14) — see `spec.md`'s Assumptions & Open Questions for the
+resolutions. Question 2 (the "new route" definition) is resolved *pragmatically* (a V0 default
+adopted despite genuine uncertainty), not fully settled; `spec.md`'s RISK-003 tracks it as a named
+follow-up rather than closed knowledge.

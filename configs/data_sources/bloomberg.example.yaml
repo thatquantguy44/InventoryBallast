@@ -1,0 +1,6 @@
+# Example Bloomberg adapter deployment configuration (Section 22.2). Illustrative only -- this
+# repo has no confirmed entitlements or field catalog (Section 22.1) and ships only the synthetic
+# adapter (specs/0011-bloomberg-data-foundation/spec.md). A real deployment would point
+# field_mapping_config/freshness_policy_config at its own reviewed files, never these examples.
+field_mapping_config: "field_mapping.example.yaml"
+freshness_policy_config: "freshness_policy.yaml"

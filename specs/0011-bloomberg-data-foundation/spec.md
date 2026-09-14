@@ -1,9 +1,9 @@
 # Spec: Bloomberg data foundation (Realism release R0 — point-in-time reference, calendars, corporate-action lineage)
 
 - **ID:** 0011-bloomberg-data-foundation
-- **Status:** Proposed — pending owner review (see Assumptions & Open Questions; not yet approved for implementation)
+- **Status:** Approved
 - **Author:** Joshua Lutkemuller, CFA (drafted by Claude Code)
-- **Approver:** pending
+- **Approver:** Joshua Lutkemuller, CFA (2026-09-14 — resolved all three open questions: (1) a fully synthetic adapter is an acceptable complete deliverable for this spec; (2) the "new route" definition for REQ-012 is uncertain and is adopted as a V0 default rather than fully resolved — see the updated Assumptions & Open Questions entry; (3) REQ-012/REQ-013 are non-blocking warnings, not hard validation failures.)
 - **Last updated:** 2026-09-14
 
 > WHAT and WHY only. No implementation detail — that belongs in `plan.md`.
@@ -79,10 +79,13 @@ confirmation (see Non-Goals and Assumptions & Open Questions).
   security identifiers (`SecurityInventory.security_id`, `LoanRoute` references) and
   `SecurityReference`, emitting a structured reconciliation exception on conflict rather than
   silently choosing a value, per §22.1's source-of-truth table.
-- Wire calendar and security-status enrichment into pre-solve validation and scenario/settlement
-  date checks — **strictly additive and opt-in**: a request that supplies no enrichment behaves
-  byte-identically to today (the same zero-cost-when-absent property every prior spec in this repo
-  has held for its own new optional field).
+- Wire calendar and security-status enrichment into pre-solve checks and scenario/settlement date
+  checks as **non-blocking, disclosed warnings** (owner decision, 2026-09-14) — **strictly additive
+  and opt-in**: a request that supplies no enrichment behaves byte-identically to today (the same
+  zero-cost-when-absent property every prior spec in this repo has held for its own new optional
+  field), and a request that does supply enrichment still solves and returns a result, with any
+  status/calendar concern surfaced in `OptimizationResult.warnings`/`MultiPeriodProjection.warnings`
+  (the same idiom `scenarios.apply.apply_events` already uses), never a raised exception.
 - Close the gap `specs/0010-multi-period-settlement/`'s own handoff note names explicitly: "no
   calendar port exists anywhere in this repo... every `planning_periods` date is treated as a valid
   settlement day." Wire the new `MarketCalendar` port into `settlement/project.py` and
@@ -135,9 +138,9 @@ confirmation (see Non-Goals and Assumptions & Open Questions).
 | REQ-009 | `adapters.bloomberg.field_mapping` shall load a versioned mapping configuration (mnemonic → business concept, unit conversion, null policy, effective-time semantics, entitlement identifier) from a YAML file matching `configs/data_sources/field_mapping.example.yaml`'s schema, and shall record the loaded mapping's own version on every value it produces. | must |
 | REQ-010 | The system shall provide a synthetic, fixture-backed implementation of both R0 ports (`adapters.bloomberg`) requiring no network access, no vendor SDK, and no credentials, usable directly in tests and local development. | must |
 | REQ-011 | The system shall provide a health-check function reporting, per configured business concept: whether it is mapped, its entitlement identifier, the last successful observation time (if any), and whether it is currently unavailable — and shall never include a credential, API key, or raw vendor payload in its output. | must |
-| REQ-012 | When an `OptimizationRequest`'s inventory or routes reference a security whose resolved `SecurityReference` status (as of the request's `as_of`) is halted, suspended, or delisted, validation shall reject any *new* route for that security with a structured issue, while leaving requests that supply no `SecurityReference` for that security completely unaffected. | must |
-| REQ-013 | When a `MarketCalendar` is supplied for a market referenced by a scenario's trade event or a multi-period request's period date, validation/compilation shall reject a settlement date that is not a valid settlement day for that market, while leaving requests/scenarios that supply no calendar completely unaffected. | must |
-| REQ-014 | `settlement.project.project_multi_period` and `formulation.multi_period` shall accept an optional `MarketCalendar` mapping and use it to validate each period's date, falling back to today's unchecked-date behavior exactly (byte-for-byte) when none is supplied. | must |
+| REQ-012 | When an `OptimizationRequest`'s inventory or routes reference a security whose resolved `SecurityReference` status (as of the request's `as_of`) is halted, suspended, or delisted, the system shall surface a non-blocking warning naming the security, its status, and any route with `current_quantity_shares == 0` for it (the adopted, owner-flagged-uncertain V0 definition of "new route" — see Assumptions & Open Questions), while leaving requests that supply no `SecurityReference` for that security completely unaffected and never rejecting the solve. | must |
+| REQ-013 | When a `MarketCalendar` is supplied for a market referenced by a scenario's trade event or a multi-period request's period date, the system shall surface a non-blocking warning naming the invalid settlement date, while leaving requests/scenarios that supply no calendar completely unaffected and never rejecting the scenario/compile. | must |
+| REQ-014 | `settlement.project.project_multi_period` and `formulation.multi_period` shall accept an optional `MarketCalendar` mapping (keyed by currency, matching `SecurityInventory.currency` — the closest existing market-identifying field; recorded as a simplification, not a silent one) and use it to surface a warning for each period whose date is not a valid settlement day, falling back to today's unchecked-date behavior exactly (byte-for-byte) when none is supplied. | must |
 | REQ-015 | The system shall provide golden/property tests demonstrating: (a) a future-dated `PointInTimeValue`/`CorporateActionEvent` correction is invisible to a resolution query whose `known_as_of` predates it; (b) an amended/cancelled `CorporateActionEvent` preserves its prior version rather than overwriting it; (c) every fixture used is synthetic, containing no real vendor field names copied from Bloomberg documentation beyond what §22.3/§22.4 already name generically in the spec text. | must |
 
 ## Non-Functional Requirements
@@ -158,9 +161,9 @@ confirmation (see Non-Goals and Assumptions & Open Questions).
 | AC-002 | Given a `CorporateActionEvent` amended twice, when the version history is inspected, then all three versions (original plus two amendments) are retrievable and none has been overwritten. | REQ-004, REQ-015 |
 | AC-003 | Given an internal security identifier and a conflicting `SecurityReference` field, when `enrichment.security_master` reconciles them, then a `ReconciliationConflict` is raised naming both values and sources, and no field is silently overridden. | REQ-007 |
 | AC-004 | Given a request that supplies no `SecurityReference`/`MarketCalendar`/`CorporateActionEvent` at all, when compiled and solved, then the result is byte-identical to the same request run against pre-this-spec code. | NFR-001 |
-| AC-005 | Given a security whose resolved status is `HALTED` as of the request's `as_of`, when a new route for that security is validated, then validation raises a structured issue naming the security and its status, and existing routes for other securities are unaffected. | REQ-012 |
-| AC-006 | Given a scenario trade event whose settlement date falls on a day the supplied `MarketCalendar` marks as a market holiday, when the scenario is applied, then it is rejected with a structured issue rather than silently proceeding. | REQ-013 |
-| AC-007 | Given a multi-period request with a supplied calendar and a period landing on an invalid settlement day, when `project_multi_period`/the joint multi-period LP compiles, then it fails closed with a structured issue; given the same request with no calendar supplied, then it behaves exactly as `specs/0010-multi-period-settlement/`'s existing tests already verify. | REQ-014, NFR-001 |
+| AC-005 | Given a security whose resolved status is `HALTED` as of the request's `as_of` and a route with `current_quantity_shares == 0` for it, when the request is solved, then the result's `warnings` names the security and its status, the solve still completes, and routes for other securities are unaffected. | REQ-012 |
+| AC-006 | Given a scenario trade event whose settlement date falls on a day the supplied `MarketCalendar` marks as a market holiday, when the scenario is applied, then a warning names the event and the invalid date, and the scenario still applies (no exception raised). | REQ-013 |
+| AC-007 | Given a multi-period request with a supplied calendar and a period landing on an invalid settlement day, when `project_multi_period`/the joint multi-period LP runs, then its `warnings` names the invalid period date and the projection/solve still completes; given the same request with no calendar supplied, then it behaves exactly as `specs/0010-multi-period-settlement/`'s existing tests already verify. | REQ-014, NFR-001 |
 | AC-008 | Given the synthetic Bloomberg adapter and a field-mapping config, when the health check runs, then it reports each configured concept's mapped/unmapped state, entitlement identifier, and last observation time, and the output contains no string matching a credential/key pattern. | REQ-011, NFR-005 |
 | AC-009 | Given a mapping config bumped to a new `field_mapping_version`, when a value is produced through it, then the value's `field_mapping_version` reflects the new version, and a value produced under the old config retains the old version (no retroactive rewrite). | REQ-009 |
 | AC-010 | Given the full existing test suite (275 tests, 2 skipped), when run after this spec's changes with no enrichment supplied anywhere, then all still pass unchanged. | NFR-001 |
@@ -181,8 +184,10 @@ confirmation (see Non-Goals and Assumptions & Open Questions).
 - `enrichment/` (new package): `point_in_time.py`, `security_master.py`.
 - `configs/data_sources/` (new): `bloomberg.example.yaml`, `field_mapping.example.yaml`,
   `freshness_policy.yaml` — example configuration only, not runtime defaults.
-- `validation/` (existing package): gains the opt-in status/calendar checks (REQ-012, REQ-013),
-  following `validation/reconciliation.py`'s existing structured-`ValidationIssue` convention.
+- `validation/` (existing package): gains the opt-in status/calendar checks (REQ-012, REQ-013) as
+  warning-returning functions, following `scenarios/apply.py::apply_events`'s existing
+  `tuple[str, ...]` warnings convention (not `validation/reconciliation.py`'s hard-fail
+  `ValidationIssue` convention, which stays reserved for genuinely blocking issues).
 - `settlement/project.py`, `formulation/multi_period.py` (existing, from
   `specs/0010-multi-period-settlement/`): gain an optional calendar parameter (REQ-014), with the
   no-calendar path required to stay byte-identical to `0010`'s own tests.
@@ -198,27 +203,26 @@ confirmation (see Non-Goals and Assumptions & Open Questions).
 | --- | --- | --- | --- |
 | RISK-001 | Building only a synthetic adapter could be mistaken for "Bloomberg integration is done" when no real vendor connection exists. | A desk could believe R0 delivers live data when it delivers only the architecture and a fixture-backed stand-in. | Every acceptance criterion and this spec's own status ("Proposed") state the synthetic scope explicitly; `tasks.md`'s Follow-ups names the real-adapter work as separately gated on entitlement confirmation, matching §22.1's own text almost verbatim. |
 | RISK-002 | Wiring an optional calendar into `settlement/project.py`/`formulation/multi_period.py` touches code `specs/0010-multi-period-settlement/` already shipped and tested. | A careless change could regress 0010's 35 existing tests. | REQ-014/AC-007 require the no-calendar path to be byte-identical; `plan.md`'s Validation Strategy runs 0010's full existing suite unchanged as a regression gate before any new calendar test is added. |
-| RISK-003 | A hard-fail-closed rule for halted/suspended securities (REQ-012) could reject a legitimate desk workflow (e.g. recalling shares of a halted security, which is not "a new route"). | Over-broad validation could block a valid recall/exit action. | REQ-012 is scoped narrowly to *new* routes only; recalls/returns/sells of an already-existing route are untouched. Flagged explicitly in Assumptions & Open Questions for owner confirmation before implementation, since "new route" needs a precise definition against existing route-state fields. |
+| RISK-003 | The "new route" definition for REQ-012 (`current_quantity_shares == 0`) is adopted despite the owner explicitly flagging it as uncertain (2026-09-14), and a warning-only design (owner decision) makes a wrong definition lower-stakes than it would be under a hard-fail design, but it could still mislabel a legitimate zero-quantity route (e.g. one temporarily fully recalled and about to be relent) as "new." | A desk could see a spurious warning, or miss a genuinely new route misclassified some other way. | Because REQ-012 is a non-blocking warning (owner decision), the worst case is a noisy or missing warning, never a blocked solve. Tracked as a named follow-up to revisit once a real desk workflow exercises it (`tasks.md`'s Follow-ups). |
 | RISK-004 | `PointInTimeValue[T]` as a generic Pydantic model may need care to stay `frozen=True`/`extra="forbid"` consistent with every other domain contract while remaining genuinely generic over `T`. | Getting this wrong could force a less type-safe design (e.g. `Any`) that undermines the whole point-in-time contract. | `plan.md` resolves the exact Pydantic generic-model pattern before any dependent contract is written; this is a mechanical HOW question, not a design judgment call, so it does not block spec approval. |
 
 ## Assumptions & Open Questions
 
-- **Open question (needs owner sign-off before implementation):** is a fully synthetic adapter —
-  with no real Bloomberg SDK call anywhere in this repo — an acceptable complete deliverable for
-  this spec, given `01_SPEC.md` §22.1's explicit statement that real entitlements/field catalogs
-  must be confirmed first? This spec assumes yes, and defers the real client as a tracked
-  follow-up. If the owner instead wants to pursue real entitlement confirmation now, that changes
-  this spec's scope materially (it would need a data-catalog input this repo does not have).
-- **Open question (needs owner sign-off):** REQ-012's precise definition of "new route" for a
-  halted/suspended/delisted security. Candidate definition: any route whose
-  `current_quantity_shares` is `0` in the incoming request (i.e., genuinely new exposure), leaving
-  any route with existing quantity free to be reduced, recalled, or sold. Confirm before
-  implementation, since getting this wrong either under- or over-blocks a real desk action.
-- **Open question (needs owner sign-off):** should REQ-013's calendar check be a hard validation
-  failure (reject the whole request/scenario) or a warning surfaced in the result, for a first
-  release with no real calendar data behind it (only synthetic fixtures)? This spec assumes hard
-  failure, matching the engineering-principles rule against silent approximation, but the owner may
-  prefer a softer rollout given today's calendars are entirely synthetic.
+- **Resolved by owner (2026-09-14):** a fully synthetic adapter — with no real Bloomberg SDK call
+  anywhere in this repo — is an acceptable complete deliverable for this spec. The real client
+  remains a tracked follow-up, gated on the firm's confirmed entitlements/field catalog per
+  `01_SPEC.md` §22.1.
+- **Resolved by owner, but explicitly not fully settled (2026-09-14):** REQ-012's "new route"
+  definition is genuinely uncertain ("uncertain" was the owner's own answer). Rather than block
+  implementation on it, this spec adopts the candidate definition — a route with
+  `current_quantity_shares == 0` in the incoming request — as a V0 default, made low-stakes by the
+  warnings-not-hard-failure decision below (a wrong definition produces a noisy or missing warning,
+  never a blocked solve). RISK-003 tracks this as a named follow-up to revisit once a real desk
+  workflow exercises it, rather than treating "uncertain" as "confirmed."
+- **Resolved by owner (2026-09-14):** REQ-012/REQ-013 are non-blocking warnings surfaced in the
+  result (`OptimizationResult.warnings`/`MultiPeriodProjection.warnings`), not hard validation
+  failures — appropriate given today's calendars/statuses are entirely synthetic fixtures, not real
+  market data. A later spec may promote either check to a hard failure once real data backs it.
 - Assumption: `EntityRelationship`, `MarketState`, `LiquidityEstimate`, and `FundHolding` (§22.3)
   are correctly excluded from R0 because no R0 task in `01_SPEC.md` §26 needs them (T19-T21's own
   acceptance evidence never references entity/price/liquidity/fund concepts) — they first appear as

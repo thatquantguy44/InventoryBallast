@@ -18,11 +18,13 @@ works identically regardless of whether period 0 was solved via ``compile_lp``, 
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import date
 from itertools import pairwise
 
 from inventory_optimizer.components.objective_terms.fee_revenue import DAY_COUNT_DIVISOR
 from inventory_optimizer.config.models import InventoryOptimizerConfig
+from inventory_optimizer.domain.reference import MarketCalendar
 from inventory_optimizer.domain.requests import OptimizationRequest
 from inventory_optimizer.domain.results import OptimizationResult
 from inventory_optimizer.domain.settlement import (
@@ -32,6 +34,7 @@ from inventory_optimizer.domain.settlement import (
     disclosure_for_mode,
 )
 from inventory_optimizer.scenarios.apply import apply_events, select_effective_events
+from inventory_optimizer.validation.reconciliation import check_settlement_calendar
 
 
 def _settle_period_zero(
@@ -97,9 +100,16 @@ def project_multi_period(
     request: OptimizationRequest,
     result: OptimizationResult,
     config: InventoryOptimizerConfig,
+    *,
+    calendars: Mapping[str, MarketCalendar] | None = None,
 ) -> MultiPeriodProjection:
     """REQ-004 through REQ-008. Empty ``request.planning_periods`` is a caller error here (there is
-    nothing to project) -- callers should simply not call this for an unset request."""
+    nothing to project) -- callers should simply not call this for an unset request.
+
+    ``calendars`` (specs/0011-bloomberg-data-foundation/, REQ-014) is optional and keyed by
+    currency -- a recorded simplification, since neither ``SecurityInventory`` nor ``LoanRoute``
+    carries a "market" field today. ``None`` (the default) reproduces this function's pre-0011
+    behavior byte-for-byte: every period date is accepted unchecked."""
     if not request.planning_periods:
         raise ValueError(
             "project_multi_period requires a non-empty planning_periods "
@@ -175,6 +185,15 @@ def project_multi_period(
         )
         economics.append(period_econ)
         total_discounted += period_econ.discounted_net_revenue_usd
+
+    if calendars:
+        currencies = {inventory.currency for inventory in request.inventory}
+        all_warnings.extend(
+            check_settlement_calendar(
+                [(boundary, currency) for boundary in boundaries for currency in currencies],
+                calendars,
+            )
+        )
 
     return MultiPeriodProjection(
         request_id=request.request_id,
