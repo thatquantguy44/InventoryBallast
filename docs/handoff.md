@@ -618,6 +618,52 @@ transformation/election handling); `MarketState`/`LiquidityEstimate`/`FundHoldin
 features; and the separate, unrelated DocumentRefinery/eligibility-collateral track described
 below (T29-T32) — same bitemporal pattern, different data domain, no shared dependency.
 
+### Bloomberg-enriched realism, Realism release R1 (`01_SPEC.md` §22.5/§22.7/§22.9; T22-T24) — proposed, pending owner sign-off (2026-09-14)
+
+`specs/0012-expected-economics-realism/` (`spec.md`, `plan.md`, `tasks.md`) — scoped 2026-09-14,
+immediately after `0011` shipped. **No code has been written; `spec.md`'s Status is `Proposed`.**
+
+Scope: T22-T24, which `01_SPEC.md` §26 says "form R1" and §25 calls "Expected economics." The
+headline consequence, in §25's own words: "R1 is required before presenting model economics as
+expected realized revenue rather than contractual run-rate revenue." Today every dollar the
+optimizer reports is a contractual run-rate number.
+
+**Three findings shaped the proposed scope:**
+
+1. **No calibration source exists in this repo** — the same structural gap `0011` had with
+   entitlements. §22.13 draws the boundary ("the optimizer receives only validated predictions and
+   uncertainty, not an opaque feature dataframe"), so estimates are *inputs carrying lineage*; the
+   estimator is upstream and out of scope. This spec builds the contracts, the objective wiring,
+   the switch, and the disclosure.
+2. **Turning expected economics on is gate `G3`** — `ROADMAPS.md` §7: "Expected-economics model
+   promotion," owned by quant research + model risk + business. This repo cannot grant it, exactly
+   as `PLT-002` already documents for its own `G2C`. So expected economics ships **off by default**
+   (`ObjectiveConfig.economics_mode="contractual"`), with a shadow/compare mode that reports
+   expected numbers beside a contractual solve without changing any allocation — the same
+   report-before-you-optimize sequencing `0010` used for projection-before-joint-LP.
+3. **Only one piece needs new formulation machinery.** Entity aggregation widens an existing
+   counterparty row's membership; expected economics is one more optional factor in
+   `fee_revenue_coefficient` (the single choke point shared by `contribute`/`attribute`/the
+   independent verifier/explanations, so all four stay consistent by construction); §22.7's dynamic
+   buffer is literally more arguments to the `max(...)` `ReserveBufferConstraint` already computes.
+   Only T24's piecewise-linear unwind cost (`PWL_i(v_i; knots)`) needs segment variables this repo
+   has never built — the spec proposes deferring it to its own spec.
+
+**Four open questions block implementation start** (see `spec.md`'s Assumptions & Open Questions):
+1. Shadow-mode default, or optimize on expected economics directly?
+2. Defer T24's piecewise-linear unwind cost to its own spec? (Recommended.)
+3. Confirm §22.9's **fail-closed** rule for low-confidence entity mappings — a deliberate departure
+   from `0011`'s warnings posture, on the principle that a credit limit is a control while a
+   data-quality observation is a disclosure.
+4. A **documentation defect**: the engine spec carries two incompatible "R" numbering schemes —
+   `01_SPEC.md` §25's realism releases (R0 = data correctness, R1 = expected economics) and
+   `ROADMAPS.md` §2's delivery roadmap (R0 = portable package, R1 = verified baseline LP, **R3 =
+   production data, T20-T24**). `TRACEABILITY.md`'s release column uses `ROADMAPS.md`'s numbering.
+   `0011` retagged `DAT-001`-`DAT-004`/`DAT-006` from `R3` to `R0` on §25's numbering, which was
+   wrong in that column's own convention; **that tag is corrected and `TRACEABILITY.md` now carries
+   a "Release Numbering" note naming which scheme the column uses.** Worth knowing when reading any
+   "R" number in this repo: name the scheme.
+
 ### Possible spec idea: schedules/collateral (T29-T32) via DocumentRefinery — not scoped, not started
 
 `SCH-001`–`SCH-004` (T29, schedule resolution) and `COL-001`–`COL-004`
@@ -741,10 +787,9 @@ the remote no longer needs creating).
 **`specs/0011-bloomberg-data-foundation/` (Realism release R0) is done (2026-09-14)** — see above.
 Per `00_PLAN.md`, after Phase 5 the two remaining workstreams were the Bloomberg-enriched realism
 track (§22, `DAT-*` rows) and the agency/prime desk track (§23, `AGY-*`/`PRM-*` rows, all
-`SPECIFIED`). The Bloomberg track's R0 slice is now implemented; **R1 (T22-T24: legal-entity
-aggregation, take-up/survival/repricing economics, dynamic liquidity buffers) is the natural next
-increment** but is not scoped as its own spec yet — bring a real desk need to the owner before
-starting it, same as every other unscoped workstream. The agency/prime desk track still has no
+`SPECIFIED`). The Bloomberg track's R0 slice is now implemented, and **R1 (T22-T24) is now scoped
+as `specs/0012-expected-economics-realism/` — Proposed, four open questions pending owner sign-off
+before implementation starts** (see its section above). The agency/prime desk track still has no
 `specs/NNNN-*` directory. The "Possible spec idea: schedules/collateral (T29-T32) via
 DocumentRefinery" section below is a separate, still-unscoped candidate, pending DocumentRefinery's
 own Phase 4 (CSA/lending-fee schedules) maturing.
