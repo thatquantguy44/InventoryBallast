@@ -32,6 +32,7 @@ from typing import Any
 from inventory_optimizer.config.hashing import canonical_json, config_hash
 from inventory_optimizer.config.loader import build_config, load_yaml_file
 from inventory_optimizer.config.models import InventoryOptimizerConfig, SolverConfig
+from inventory_optimizer.domain.reference import PointInTimeValue, SecurityReference
 from inventory_optimizer.domain.requests import OptimizationRequest
 from inventory_optimizer.domain.results import OptimizationResult
 from inventory_optimizer.exceptions import ConfigurationError
@@ -45,6 +46,7 @@ from inventory_optimizer.ports.solver import SolverBackend, SolverOptions
 from inventory_optimizer.reporting.result_builder import build_optimization_result
 from inventory_optimizer.reporting.types import VerifiedSolution
 from inventory_optimizer.validation import raise_if_invalid
+from inventory_optimizer.validation.reconciliation import check_security_tradability
 from inventory_optimizer.validation.solution_verifier import verify_solution
 
 _PACKAGE_DEFAULT_YAML_PATH = Path(__file__).resolve().parents[2] / "configs" / "default.yaml"
@@ -106,6 +108,7 @@ class InventoryOptimizer:
         request: OptimizationRequest,
         *,
         platform: PlatformInvocationContext | None = None,
+        security_references: Mapping[str, PointInTimeValue[SecurityReference]] = {},
     ) -> OptimizationResult:
         raise_if_invalid(request, max_staleness_hours=self._config.validation.max_staleness_hours)
         context = build_context(request, self._config)
@@ -120,7 +123,7 @@ class InventoryOptimizer:
         solution = VerifiedSolution(
             context=context, problem=problem, result=result, verification=verification
         )
-        return build_optimization_result(
+        optimization_result = build_optimization_result(
             solution,
             run_id=_generate_run_id(self._config.observability.run_id_prefix),
             created_at=datetime.now(UTC),
@@ -128,6 +131,14 @@ class InventoryOptimizer:
             input_hash=_hash_request(request),
             platform=platform,
         )
+        # REQ-012 (specs/0011-bloomberg-data-foundation/): a non-blocking warning, appended only
+        # when the caller actually supplies enrichment (NFR-001's zero-cost-when-absent guarantee).
+        extra_warnings = check_security_tradability(request, security_references)
+        if extra_warnings:
+            optimization_result = optimization_result.model_copy(
+                update={"warnings": optimization_result.warnings + extra_warnings}
+            )
+        return optimization_result
 
 
 def load_config(

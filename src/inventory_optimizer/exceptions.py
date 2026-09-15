@@ -63,6 +63,36 @@ class AttributionMismatchError(Exception):
         )
 
 
+class ReconciliationConflict(Exception):
+    """Raised when an internal security identifier's field disagrees with a Bloomberg (or
+    equivalent) ``SecurityReference`` field (Section 22.1's source-of-truth table: "the adapter
+    emits a reconciliation exception or a configured override record. It never silently chooses
+    one."). This spec (0011) ships only the exception path; a configured-override path is a
+    tracked follow-up."""
+
+    def __init__(
+        self,
+        *,
+        internal_security_id: str,
+        field: str,
+        internal_value: object,
+        internal_source: str,
+        bloomberg_value: object,
+        bloomberg_source_version: str,
+    ) -> None:
+        self.internal_security_id = internal_security_id
+        self.field = field
+        self.internal_value = internal_value
+        self.internal_source = internal_source
+        self.bloomberg_value = bloomberg_value
+        self.bloomberg_source_version = bloomberg_source_version
+        super().__init__(
+            f"{internal_security_id!r}.{field}: internal value {internal_value!r} "
+            f"(source={internal_source!r}) conflicts with Bloomberg value {bloomberg_value!r} "
+            f"(source_version={bloomberg_source_version!r})"
+        )
+
+
 class ScenarioApplicationError(Exception):
     """Raised when a ``Scenario`` cannot be applied to a baseline request: an unordered
     composition conflict (two effective ``RETURN``/``RECALL`` events on the same route, Section

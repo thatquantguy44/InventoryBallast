@@ -8,10 +8,22 @@ Each function returns every issue it finds; callers aggregate rather than short-
 from __future__ import annotations
 
 from collections import Counter, defaultdict
+from collections.abc import Mapping, Sequence
+from datetime import date
 
 from inventory_optimizer.domain.enums import TradeEventType
+from inventory_optimizer.domain.reference import (
+    MarketCalendar,
+    PointInTimeValue,
+    SecurityReference,
+    TradingStatus,
+)
 from inventory_optimizer.domain.requests import OptimizationRequest
 from inventory_optimizer.exceptions import ValidationIssue
+
+_BLOCKED_TRADING_STATUSES = frozenset(
+    {TradingStatus.HALTED, TradingStatus.SUSPENDED, TradingStatus.DELISTED}
+)
 
 BALANCE_TOLERANCE_SHARES = 1e-6
 
@@ -237,3 +249,53 @@ def reconcile(request: OptimizationRequest) -> tuple[ValidationIssue, ...]:
         + check_demand_group_fee_consistency(request)
         + check_recall_notice_sufficiency(request)
     )
+
+
+def check_security_tradability(
+    request: OptimizationRequest,
+    references: Mapping[str, PointInTimeValue[SecurityReference]] = {},
+) -> tuple[str, ...]:
+    """REQ-012 (specs/0011-bloomberg-data-foundation/): a non-blocking warning, never a
+    ``ValidationIssue`` -- the owner's 2026-09-14 decision. A route counts as "new" when its
+    ``current_quantity_shares`` is ``0`` in the incoming request; this is an adopted V0 default the
+    owner flagged as uncertain (spec.md's RISK-003), made low-stakes by this being a warning, not a
+    rejection. Absent ``references``, always returns ``()`` -- zero cost when no enrichment is
+    supplied (NFR-001)."""
+    if not references:
+        return ()
+    warnings: list[str] = []
+    for route in request.routes:
+        reference = references.get(route.security_id)
+        if reference is None:
+            continue
+        if (
+            reference.value.trading_status in _BLOCKED_TRADING_STATUSES
+            and route.current_quantity_shares == 0.0
+        ):
+            warnings.append(
+                f"route {route.route_id!r} is a new route (current_quantity_shares == 0) for "
+                f"security {route.security_id!r}, whose status is "
+                f"{reference.value.trading_status.value!r}"
+            )
+    return tuple(warnings)
+
+
+def check_settlement_calendar(
+    dates_and_markets: Sequence[tuple[date, str]],
+    calendars: Mapping[str, MarketCalendar] = {},
+) -> tuple[str, ...]:
+    """REQ-013: a non-blocking warning per ``(date, market)`` pair where ``market`` is present in
+    ``calendars`` and the date is not a valid settlement day. A market absent from ``calendars``,
+    or an empty ``calendars`` mapping, contributes no warnings at all (NFR-001)."""
+    if not calendars:
+        return ()
+    warnings: list[str] = []
+    for day, market in dates_and_markets:
+        calendar = calendars.get(market)
+        if calendar is None:
+            continue
+        if not calendar.is_settlement_day(day):
+            warnings.append(
+                f"{day.isoformat()} is not a valid settlement day for market {market!r}"
+            )
+    return tuple(warnings)

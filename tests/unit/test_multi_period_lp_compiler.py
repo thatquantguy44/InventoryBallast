@@ -19,6 +19,7 @@ from inventory_optimizer.domain.enums import (
     TradeEventType,
 )
 from inventory_optimizer.domain.policies import UtilizationPolicy
+from inventory_optimizer.domain.reference import MarketCalendar
 from inventory_optimizer.domain.requests import OptimizationRequest
 from inventory_optimizer.domain.scenarios import TradeEvent
 from inventory_optimizer.exceptions import InputValidationError
@@ -486,3 +487,34 @@ def test_solve_multi_period_accepts_an_explicit_backend(
     request = _multi_period_request(inventory_factory, route_factory, demand_factory)
     projection = solve_multi_period(request, default_config, backend=HighsBackend())
     assert projection.status is SolverStatus.OPTIMAL
+
+
+def test_solve_multi_period_no_calendar_matches_pre_0011_baseline(
+    inventory_factory, route_factory, demand_factory, default_config
+) -> None:
+    """AC-007/REQ-014 (specs/0011-bloomberg-data-foundation/): omitting ``calendars`` reproduces
+    this function's pre-0011 behavior byte-for-byte, even for a period landing on a Saturday."""
+    saturday = date(2026, 9, 5)
+    request = _multi_period_request(
+        inventory_factory, route_factory, demand_factory, planning_periods=(saturday,)
+    )
+    projection = solve_multi_period(request, default_config)
+    assert projection.warnings == ()
+
+    projection_explicit_none = solve_multi_period(request, default_config, calendars=None)
+    assert projection_explicit_none == projection
+
+
+def test_solve_multi_period_calendar_warns_on_invalid_period_date(
+    inventory_factory, route_factory, demand_factory, default_config
+) -> None:
+    """AC-007: a supplied calendar surfaces a warning rather than rejecting the solve."""
+    saturday = date(2026, 9, 5)
+    request = _multi_period_request(
+        inventory_factory, route_factory, demand_factory, planning_periods=(saturday,)
+    )
+    calendar = MarketCalendar(market="US", currency="USD")
+    projection = solve_multi_period(request, default_config, calendars={"USD": calendar})
+    assert projection.mode == "jointly_optimized"
+    assert projection.status is SolverStatus.OPTIMAL
+    assert any(saturday.isoformat() in warning for warning in projection.warnings)

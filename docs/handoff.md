@@ -92,7 +92,7 @@ Per `specs/engine_spec/00_PLAN.md`'s status line and `TRACEABILITY.md`:
 ```bash
 python3 -m venv .venv
 .venv/bin/python -m pip install -e ".[dev,highs,dataframe,agentic]"
-.venv/bin/python -m pytest tests/ -q         # 275 passed, 2 skipped (pandas absent), as of this writing (fast; excludes `slow`)
+.venv/bin/python -m pytest tests/ -q         # 324 passed, 2 skipped (pandas absent) -- or 326 passed, 0 skipped if the dataframe extra's pandas is present, as of this writing (fast; excludes `slow`)
 .venv/bin/python -m pytest tests/ -m slow -q # 4 benchmark smoke tests (Core desk LP, QP, fee-tier, multi-period LP scale)
 inventory-optimizer doctor                    # sanity-check the installed console script
 ```
@@ -533,6 +533,137 @@ Excel workbooks (the QuantSmith dashboard surfaces were already evaluated and
 parked — see below), narrative prose summaries, any new derived metric, and a
 redundant `json_io.py` wrapper around what Pydantic already does.
 
+### Bloomberg-enriched realism, Realism release R0 (`01_SPEC.md` §22.2-§22.4; T19-T21) — done (2026-09-14)
+
+`specs/0011-bloomberg-data-foundation/` (`spec.md`, `plan.md`, `tasks.md`) — drafted and fully
+implemented 2026-09-14 in direct response to the owner's instruction to start the Bloomberg-
+enriched realism workstream (the first of the two post-Phase-5 workstreams named below). All
+fourteen tasks (`T-001`-`T-014`) done: 49 new tests (326 passed total, up from 277 pre-this-spec,
+zero regressions; `pytest tests/ -m slow -q` unchanged at 4 passed). Closes
+`specs/engine_spec/TRACEABILITY.md`'s `DAT-001`-`DAT-004`/`DAT-006` rows (`DAT-005` — calibrated
+economic estimates — stays `SPECIFIED`, waiting on R1).
+
+**Three open questions were put to the owner and resolved (2026-09-14)** before implementation
+started, matching the `0009`/`0010` sign-off pattern:
+1. A fully synthetic adapter (no real Bloomberg SDK call anywhere) is an acceptable *complete*
+   deliverable — **yes**.
+2. What counts as a "new route" for the halted-security check — **uncertain** (the owner's own
+   answer); adopted `current_quantity_shares == 0` as a V0 default anyway, made low-stakes by
+   decision 3, and tracked as a named follow-up (`spec.md`'s RISK-003) rather than treated as
+   settled.
+3. Hard failure or warning for status/calendar violations — **warnings**, not hard failures. This
+   is a deliberate departure from this repo's usual fail-closed validation default, justified
+   because today's calendars/statuses are entirely synthetic fixtures, not real market data.
+
+**What shipped:** `domain/reference.py` (`PointInTimeValue[T]`, `SecurityReference`,
+`MarketCalendar`, `DataQuality`, `TradingStatus`) and `domain/events.py` (`CorporateActionEvent`,
+versioned, never mutated in place); `enrichment/point_in_time.py::resolve_latest_known` (the
+no-look-ahead as-of resolution join, covered by a `hypothesis` property test) and
+`enrichment/security_master.py::reconcile` (raises `ReconciliationConflict` on an internal/
+Bloomberg disagreement rather than silently choosing one); `ports/reference_data.py` and
+`ports/corporate_actions.py` (vendor-agnostic `Protocol`s); `adapters/bloomberg/` — the sole module
+tree permitted to reference a vendor mnemonic, with a versioned `field_mapping.py` loader and a
+**synthetic, fixture-backed** implementation of both ports (no real vendor SDK call exists
+anywhere in this repo); a `bloomberg-doctor` CLI subcommand (health-check listing per business
+concept, no credential ever exposed); and non-blocking warning wiring — `validation.reconciliation.
+check_security_tradability`/`check_settlement_calendar` — threaded into
+`facade.InventoryOptimizer.optimize()` (`security_references` param), `scenarios.apply.
+apply_scenario` (`calendars` param), and `settlement.project.project_multi_period`/
+`formulation.multi_period.solve_multi_period` (`calendars` param, keyed by currency — a recorded
+simplification since no domain contract carries a "market" field yet). Every new parameter is
+optional and defaults to today's exact behavior (NFR-001) — closes the calendar gap
+`specs/0010-multi-period-settlement/`'s own handoff entry named explicitly ("no calendar port
+exists anywhere in this repo").
+
+**Real vendor-SDK integration remains a tracked follow-up**, gated on the firm's confirmed
+entitlements and field catalog (§22.1) — this repo has neither. R1 (T22-T24: legal-entity
+aggregation, take-up/survival/repricing economics, dynamic liquidity buffers) depends on this
+spec's T19/T20 and is not started.
+
+Scope: exactly T19-T21, which `01_SPEC.md` §26's task matrix calls "required realism release R0."
+This is the correct starting slice regardless of §22.15's own text calling R1 "the recommended
+first realism release," because R1's own tasks (T22-T24) each depend on T19/T20 — R0 is a hard
+prerequisite, not a preference. R0 stays "Validation only"/"LP bounds/RHS"/"Data architecture"
+impact per §22.15 — no new objective term, no economic coefficient, matching this repo's practice
+of never modeling economics without a calibration source behind them.
+
+What it builds: point-in-time contracts (`PointInTimeValue[T]`, `SecurityReference`,
+`MarketCalendar`, `CorporateActionEvent`); the two R0 ports (`reference_data`,
+`corporate_actions`) as vendor-agnostic `Protocol`s; a **synthetic, fixture-backed** Bloomberg
+adapter (`adapters/bloomberg/`) — no real vendor SDK call anywhere, since this repo has no
+Bloomberg entitlement or confirmed field catalog, exactly the precondition `01_SPEC.md` §22.1
+itself names; an as-of resolution join preventing look-ahead; security-master reconciliation that
+fails closed (never silently overrides an internal value) on conflict; opt-in pre-solve validation
+for halted/suspended/delisted securities and invalid settlement dates; and closes a gap
+`specs/0010-multi-period-settlement/`'s own handoff entry named explicitly ("no calendar port
+exists anywhere in this repo") by wiring an optional calendar into `settlement/project.py`/
+`formulation/multi_period.py`, byte-identical to `0010`'s existing behavior when no calendar is
+supplied.
+
+**Three open questions block implementation start**, all requiring real owner judgment (the same
+pattern `0009`/`0010` used before their own implementation began) — see `spec.md`'s Assumptions &
+Open Questions and `plan.md`'s Open Questions for full context:
+
+1. Is a fully synthetic adapter (no real Bloomberg SDK call anywhere) an acceptable *complete*
+   deliverable for this spec, given entitlements/field catalog are unconfirmed?
+2. What exactly counts as a "new route" for the halted-security validation check (candidate:
+   `current_quantity_shares == 0` in the incoming request)?
+3. Should the calendar/status checks be hard validation failures or warnings, given today's
+   calendars and statuses are entirely synthetic fixtures, not real market data?
+
+Explicitly **not** in this spec's scope (tracked as follow-ups): a real vendor-SDK-backed adapter;
+R1 economics (legal-entity aggregation, take-up/survival/repricing hazards, liquidity buffers —
+T22-T24); full corporate-action economics beyond timing/status (§22.8's cash-flow/quantity-
+transformation/election handling); `MarketState`/`LiquidityEstimate`/`FundHolding`/event-regime
+features; and the separate, unrelated DocumentRefinery/eligibility-collateral track described
+below (T29-T32) — same bitemporal pattern, different data domain, no shared dependency.
+
+### Bloomberg-enriched realism, Realism release R1 (`01_SPEC.md` §22.5/§22.7/§22.9; T22-T24) — proposed, pending owner sign-off (2026-09-14)
+
+`specs/0012-expected-economics-realism/` (`spec.md`, `plan.md`, `tasks.md`) — scoped 2026-09-14,
+immediately after `0011` shipped. **No code has been written; `spec.md`'s Status is `Proposed`.**
+
+Scope: T22-T24, which `01_SPEC.md` §26 says "form R1" and §25 calls "Expected economics." The
+headline consequence, in §25's own words: "R1 is required before presenting model economics as
+expected realized revenue rather than contractual run-rate revenue." Today every dollar the
+optimizer reports is a contractual run-rate number.
+
+**Three findings shaped the proposed scope:**
+
+1. **No calibration source exists in this repo** — the same structural gap `0011` had with
+   entitlements. §22.13 draws the boundary ("the optimizer receives only validated predictions and
+   uncertainty, not an opaque feature dataframe"), so estimates are *inputs carrying lineage*; the
+   estimator is upstream and out of scope. This spec builds the contracts, the objective wiring,
+   the switch, and the disclosure.
+2. **Turning expected economics on is gate `G3`** — `ROADMAPS.md` §7: "Expected-economics model
+   promotion," owned by quant research + model risk + business. This repo cannot grant it, exactly
+   as `PLT-002` already documents for its own `G2C`. So expected economics ships **off by default**
+   (`ObjectiveConfig.economics_mode="contractual"`), with a shadow/compare mode that reports
+   expected numbers beside a contractual solve without changing any allocation — the same
+   report-before-you-optimize sequencing `0010` used for projection-before-joint-LP.
+3. **Only one piece needs new formulation machinery.** Entity aggregation widens an existing
+   counterparty row's membership; expected economics is one more optional factor in
+   `fee_revenue_coefficient` (the single choke point shared by `contribute`/`attribute`/the
+   independent verifier/explanations, so all four stay consistent by construction); §22.7's dynamic
+   buffer is literally more arguments to the `max(...)` `ReserveBufferConstraint` already computes.
+   Only T24's piecewise-linear unwind cost (`PWL_i(v_i; knots)`) needs segment variables this repo
+   has never built — the spec proposes deferring it to its own spec.
+
+**Four open questions block implementation start** (see `spec.md`'s Assumptions & Open Questions):
+1. Shadow-mode default, or optimize on expected economics directly?
+2. Defer T24's piecewise-linear unwind cost to its own spec? (Recommended.)
+3. Confirm §22.9's **fail-closed** rule for low-confidence entity mappings — a deliberate departure
+   from `0011`'s warnings posture, on the principle that a credit limit is a control while a
+   data-quality observation is a disclosure.
+4. A **documentation defect**: the engine spec carries two incompatible "R" numbering schemes —
+   `01_SPEC.md` §25's realism releases (R0 = data correctness, R1 = expected economics) and
+   `ROADMAPS.md` §2's delivery roadmap (R0 = portable package, R1 = verified baseline LP, **R3 =
+   production data, T20-T24**). `TRACEABILITY.md`'s release column uses `ROADMAPS.md`'s numbering.
+   `0011` retagged `DAT-001`-`DAT-004`/`DAT-006` from `R3` to `R0` on §25's numbering, which was
+   wrong in that column's own convention; **that tag is corrected and `TRACEABILITY.md` now carries
+   a "Release Numbering" note naming which scheme the column uses.** Worth knowing when reading any
+   "R" number in this repo: name the scheme.
+
 ### Possible spec idea: schedules/collateral (T29-T32) via DocumentRefinery — not scoped, not started
 
 `SCH-001`–`SCH-004` (T29, schedule resolution) and `COL-001`–`COL-004`
@@ -653,17 +784,15 @@ settlement, both designs) are all done** (2026-09-04, 2026-09-05 ×5,
 `main` on GitHub (`thatquantguy44/InventoryBallast` — see "Open items" below;
 the remote no longer needs creating).
 
-**Next up: nothing in the engine spec's own phase sequence is scoped yet.**
-Per `00_PLAN.md`, after Phase 5 the two remaining workstreams are the
-Bloomberg-enriched realism track (§22, `DAT-*` rows, all `SPECIFIED`) and the
-agency/prime desk track (§23, `AGY-*`/`PRM-*` rows, all `SPECIFIED`) — neither
-has a `specs/NNNN-*` directory yet. The "Possible spec idea: schedules/
-collateral (T29-T32) via DocumentRefinery" section above is the most
-concretely scoped candidate among them, but is explicitly flagged as an idea,
-not a plan, pending DocumentRefinery's own Phase 4 (CSA/lending-fee schedules)
-maturing. Bring a real desk need to the owner before starting any of these —
-none has the kind of "spec already says exactly what to build" grounding that
-made `0009`/`0010` straightforward once approved.
+**`specs/0011-bloomberg-data-foundation/` (Realism release R0) is done (2026-09-14)** — see above.
+Per `00_PLAN.md`, after Phase 5 the two remaining workstreams were the Bloomberg-enriched realism
+track (§22, `DAT-*` rows) and the agency/prime desk track (§23, `AGY-*`/`PRM-*` rows, all
+`SPECIFIED`). The Bloomberg track's R0 slice is now implemented, and **R1 (T22-T24) is now scoped
+as `specs/0012-expected-economics-realism/` — Proposed, four open questions pending owner sign-off
+before implementation starts** (see its section above). The agency/prime desk track still has no
+`specs/NNNN-*` directory. The "Possible spec idea: schedules/collateral (T29-T32) via
+DocumentRefinery" section below is a separate, still-unscoped candidate, pending DocumentRefinery's
+own Phase 4 (CSA/lending-fee schedules) maturing.
 
 **Also worth doing, lower stakes than a new phase:** `docs/adoption_guide.md`
 step 6 was finally wired in this repo (`.githooks/`, `setup-hooks.sh`, a

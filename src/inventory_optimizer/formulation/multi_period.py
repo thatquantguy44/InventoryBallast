@@ -74,6 +74,7 @@ from inventory_optimizer.domain.enums import Formulation, ObjectiveSense, TradeE
 from inventory_optimizer.domain.inventory import SecurityInventory
 from inventory_optimizer.domain.loans import LoanRoute
 from inventory_optimizer.domain.policies import CounterpartyLimit, UtilizationPolicy
+from inventory_optimizer.domain.reference import MarketCalendar
 from inventory_optimizer.domain.requests import OptimizationRequest
 from inventory_optimizer.domain.scenarios import TradeEvent
 from inventory_optimizer.domain.settlement import (
@@ -92,6 +93,7 @@ from inventory_optimizer.formulation.variables import build_variable_index
 from inventory_optimizer.ports.solver import SolverBackend, SolverOptions, SolverResult
 from inventory_optimizer.scenarios.apply import select_effective_events
 from inventory_optimizer.validation import raise_if_invalid
+from inventory_optimizer.validation.reconciliation import check_settlement_calendar
 from inventory_optimizer.validation.solution_verifier import verify_solution
 
 T = TypeVar("T")
@@ -669,7 +671,11 @@ def _primal_at(
 
 
 def _build_projection(
-    context: MultiPeriodContext, variable_index: VariableIndex, result: SolverResult
+    context: MultiPeriodContext,
+    variable_index: VariableIndex,
+    result: SolverResult,
+    *,
+    calendars: Mapping[str, MarketCalendar] | None = None,
 ) -> MultiPeriodProjection:
     """Builds the ``mode="jointly_optimized"`` counterpart to ``settlement.project.
     project_multi_period``'s ``mode="projected"`` -- same result type, same per-period balance/
@@ -738,6 +744,14 @@ def _build_projection(
         )
         total_discounted += discounted
 
+    warnings: tuple[str, ...] = ()
+    if calendars:
+        currencies = {inventory.currency for inventory in request.inventory}
+        warnings = check_settlement_calendar(
+            [(boundary, currency) for boundary in context.boundaries for currency in currencies],
+            calendars,
+        )
+
     return MultiPeriodProjection(
         request_id=request.request_id,
         mode="jointly_optimized",
@@ -746,7 +760,7 @@ def _build_projection(
         balances=tuple(balances),
         economics=tuple(economics),
         total_discounted_net_revenue_usd=total_discounted,
-        warnings=(),
+        warnings=warnings,
         disclosure=disclosure_for_mode("jointly_optimized"),
     )
 
@@ -756,6 +770,7 @@ def solve_multi_period(
     config: InventoryOptimizerConfig,
     *,
     backend: SolverBackend | None = None,
+    calendars: Mapping[str, MarketCalendar] | None = None,
 ) -> MultiPeriodProjection:
     """REQ-012's new, separate entry point -- a caller uses this instead of ``facade.
     InventoryOptimizer.optimize()`` when it wants the jointly-optimized answer.
@@ -774,6 +789,10 @@ def solve_multi_period(
     Mirrors ``settlement.project.project_multi_period``'s own honest-status contract (NFR-004):
     a no-feasible-primal result returns an empty ``MultiPeriodProjection`` carrying the solver's
     own status and a warning, rather than raising.
+
+    ``calendars`` (specs/0011-bloomberg-data-foundation/, REQ-014) is optional and keyed by
+    currency, mirroring ``settlement.project.project_multi_period``'s own simplification. ``None``
+    (the default) reproduces this function's pre-0011 behavior byte-for-byte.
     """
     _require_planning_periods(request, caller="solve_multi_period")
     raise_if_invalid(request, max_staleness_hours=config.validation.max_staleness_hours)
@@ -800,4 +819,4 @@ def solve_multi_period(
             disclosure=disclosure_for_mode("jointly_optimized"),
         )
 
-    return _build_projection(context, problem.variable_index, result)
+    return _build_projection(context, problem.variable_index, result, calendars=calendars)

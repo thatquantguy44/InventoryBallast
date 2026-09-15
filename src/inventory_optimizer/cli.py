@@ -18,8 +18,12 @@ import dataclasses
 import json
 import sys
 from collections.abc import Sequence
+from datetime import UTC, datetime
 from pathlib import Path
 
+from inventory_optimizer.adapters.bloomberg.field_mapping import load_field_mapping
+from inventory_optimizer.adapters.bloomberg.health import check_bloomberg_adapter_health
+from inventory_optimizer.adapters.bloomberg.reference import SyntheticReferenceDataAdapter
 from inventory_optimizer.adapters.csv_io import write_tables
 from inventory_optimizer.domain.enums import SolverStatus
 from inventory_optimizer.domain.requests import OptimizationRequest
@@ -52,6 +56,13 @@ EXIT_INTERNAL_ERROR = 4
 
 _INFEASIBLE_STATUSES = frozenset(
     {SolverStatus.INFEASIBLE, SolverStatus.UNBOUNDED, SolverStatus.INFEASIBLE_OR_UNBOUNDED}
+)
+
+_PACKAGE_DEFAULT_FIELD_MAPPING_PATH = (
+    Path(__file__).resolve().parents[2]
+    / "configs"
+    / "data_sources"
+    / "field_mapping.example.yaml"
 )
 
 
@@ -202,6 +213,49 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
     return EXIT_SUCCESS if all_passed else EXIT_INTERNAL_ERROR
 
 
+def _cmd_bloomberg_doctor(args: argparse.Namespace) -> int:
+    """REQ-011 (Section 22.4): lists every configured business concept's mapped/entitlement/
+    last-observed/available state. Ships only the synthetic adapter (specs/0011-bloomberg-data-
+    foundation/spec.md); with no fixture data supplied via this CLI, ``available`` is honestly
+    ``False`` for every concept -- this command reports whether the *mapping* loads, not whether a
+    real Bloomberg connection exists (none does). No credential ever appears in the output because
+    none exists on ``FieldMapping``/``ConceptMapping`` to begin with."""
+    mapping_path = (
+        Path(args.field_mapping) if args.field_mapping else _PACKAGE_DEFAULT_FIELD_MAPPING_PATH
+    )
+    try:
+        mapping = load_field_mapping(mapping_path)
+    except ConfigurationError as exc:
+        _eprint(f"configuration error: {exc}")
+        return EXIT_INTERNAL_ERROR
+
+    adapter = SyntheticReferenceDataAdapter(field_mapping=mapping)
+    report = check_bloomberg_adapter_health(
+        mapping,
+        adapter,
+        sample_security_id=args.sample_security_id,
+        known_as_of=datetime.now(UTC),
+        sample_market=args.sample_market,
+    )
+    payload = {
+        "field_mapping_version": report.field_mapping_version,
+        "concepts": [
+            {
+                "concept": concept.concept,
+                "mapped": concept.mapped,
+                "entitlement_id": concept.entitlement_id,
+                "last_observed_at": (
+                    concept.last_observed_at.isoformat() if concept.last_observed_at else None
+                ),
+                "available": concept.available,
+            }
+            for concept in report.concepts
+        ],
+    }
+    _write_output(json.dumps(payload, indent=2, sort_keys=True), args.output)
+    return EXIT_SUCCESS
+
+
 def _cmd_tables(args: argparse.Namespace) -> int:
     """Flatten a previously-emitted result/comparison/stress JSON into one CSV per table
     (specs/0008-tabular-result-output/). Reads what ``optimize``/``scenarios`` already write rather
@@ -349,6 +403,23 @@ def _build_parser() -> argparse.ArgumentParser:
     p_doctor = sub.add_parser("doctor", help="Run read-only environment/config self-checks.")
     p_doctor.add_argument("--output", help="Write JSON output here instead of stdout.")
 
+    p_bloomberg_doctor = sub.add_parser(
+        "bloomberg-doctor",
+        help="Report the Bloomberg field-mapping's concept coverage (Section 22.4).",
+    )
+    p_bloomberg_doctor.add_argument(
+        "--field-mapping", help="Path to a field-mapping YAML file (default: the shipped example)."
+    )
+    p_bloomberg_doctor.add_argument(
+        "--sample-security-id",
+        default="EXAMPLE-SEC-1",
+        help="Internal security ID used to probe security_reference.* concepts.",
+    )
+    p_bloomberg_doctor.add_argument(
+        "--sample-market", help="Market identifier used to probe market_calendar.* concepts."
+    )
+    p_bloomberg_doctor.add_argument("--output", help="Write JSON output here instead of stdout.")
+
     return parser
 
 
@@ -359,6 +430,7 @@ _DISPATCH = {
     "tables": _cmd_tables,
     "components": _cmd_components,
     "doctor": _cmd_doctor,
+    "bloomberg-doctor": _cmd_bloomberg_doctor,
 }
 
 

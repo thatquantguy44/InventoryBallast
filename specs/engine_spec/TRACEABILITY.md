@@ -27,6 +27,19 @@ and links concrete evidence.
 
 ---
 
+## Release Numbering in the `Task/release/gate` Column
+
+**This matrix's release column uses `ROADMAPS.md` §2's delivery roadmap numbering** (`R0` = portable
+package and platform-integration foundation, `R1` = verified baseline LP, `R2` = trade and shock
+scenarios, `R3` = production data and schedule realism, `R4`-`R8` as listed there).
+
+`01_SPEC.md` §25 separately defines *realism releases* `R0`-`R3` (`R0` = data correctness, `R1` =
+expected economics, `R2` = uncertainty and timing, `R3` = structural alternatives). **The two
+schemes share names and mean different things**: the Bloomberg point-in-time work is §25's realism
+`R0` but this column's `R3`. When citing a release outside this file, name the scheme.
+
+---
+
 ## Requirement ID Scheme
 
 | Prefix | Domain |
@@ -124,12 +137,12 @@ and links concrete evidence.
 
 | ID | Requirement | Spec location | Planned module/component | Config/input | Evidence | Task/release/gate | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| DAT-001 | Internal books/contracts/eligibility/limits remain authoritative | 22.1 | adapter reconciliation | source authority | conflict fixtures | T19-T20 / R3 / G2 | `SPECIFIED` |
-| DAT-002 | Every enriched concept retains observed/effective time and mapping/source version | 22.2-22.3 | point-in-time contracts | field mapping | no-look-ahead tests | T19-T20 / R0-R3 / G2 | `SPECIFIED` |
-| DAT-003 | Bloomberg concepts are mapped by deployment configuration, not hard-coded mnemonics | 22.2 | Bloomberg adapter | mapping config | synthetic contract tests | T20 / R3 / G2 | `SPECIFIED` |
-| DAT-004 | Corporate-action changes preserve history and invalidate affected caches | 22.8 | event adapter/cache | event versions | amendment/cancel tests | T21 / R3 / G2 | `SPECIFIED` |
+| DAT-001 | Internal books/contracts/eligibility/limits remain authoritative | 22.1 | adapter reconciliation | source authority | `tests/unit/test_security_master.py` (`enrichment.security_master.reconcile` raises `ReconciliationConflict` rather than silently overriding); `tests/unit/test_reconciliation_bloomberg.py` (Bloomberg status/calendar enrichment is a non-blocking warning, never authoritative over the solve) | T19-T20 / R3 / G2 | `IMPLEMENTED` (0011 scope: exception-path reconciliation only; a configured-override path per §22.1's other sanctioned option is a tracked follow-up — `specs/0011-bloomberg-data-foundation/tasks.md`) |
+| DAT-002 | Every enriched concept retains observed/effective time and mapping/source version | 22.2-22.3 | point-in-time contracts | field mapping | `tests/unit/test_domain_reference.py` (`PointInTimeValue` field/interval validation); `tests/unit/test_point_in_time.py` (`resolve_latest_known`'s no-look-ahead property test) | T19-T20 / R3 / G2 | `IMPLEMENTED` for 0011's contracts (`SecurityReference`, `MarketCalendar`); `EntityRelationship`/`MarketState`/`LiquidityEstimate`/`FundHolding` stay `SPECIFIED` (R1+, T22-T24) |
+| DAT-003 | Bloomberg concepts are mapped by deployment configuration, not hard-coded mnemonics | 22.2 | Bloomberg adapter | mapping config | `tests/unit/test_field_mapping.py`; `tests/unit/test_architecture_boundaries.py::test_no_bloomberg_mnemonic_outside_adapter` | T20 / R3 / G2 | `IMPLEMENTED` (synthetic adapter only — a real vendor-SDK-backed adapter is a tracked follow-up pending entitlement confirmation, §22.1) |
+| DAT-004 | Corporate-action changes preserve history and invalidate affected caches | 22.8 | event adapter/cache | event versions | `tests/unit/test_domain_events.py::test_amendment_preserves_prior_version` | T21 / R3 / G2 | `IMPLEMENTED` for identity/timing/version lineage; full §22.8 economic consequences (quantity transformation, manufactured-payment cost, election handling) stay `SPECIFIED` (R1+) |
 | DAT-005 | Liquidity and predictive estimates are calibrated to internal outcomes and labeled estimates | 22.5-22.7 | upstream feature adapter | model versions | walk-forward/challenger tests | T23-T25 / R3-R5 / G3 | `SPECIFIED` |
-| DAT-006 | Licensed/vendor payloads do not enter fixtures or raw logs | 21.3, 22.2 | redaction/adapters | entitlement policy | fixture/log scan | T16, T20 / R3 / G2 | `SPECIFIED` |
+| DAT-006 | Licensed/vendor payloads do not enter fixtures or raw logs | 21.3, 22.2 | redaction/adapters | entitlement policy | Manual fixture review (every fixture in `specs/0011-bloomberg-data-foundation/`'s tests is hand-authored, not a captured real Bloomberg response); `tests/unit/test_bloomberg_doctor.py` (no credential-shaped string in health-check output) | T16, T20 / R3 / G2 | `IMPLEMENTED` |
 
 ---
 
@@ -285,7 +298,7 @@ Primary requirements: all baseline requirements plus `PRM-001` through `PRM-010`
 | Domain/LP/economics | `DOM-001`–`DOM-004`, `LP-001`–`LP-009` | E1-E3, E5, E7-E8 |
 | Schedules/collateral/scenarios | `SCH-001`–`SCH-004`, `COL-001`–`COL-004`, `SCN-001`–`SCN-004` | E2-E5 |
 | Solver/verification/results | `SOL-001`–`SOL-003`, `VER-001`–`VER-006` | E1-E9 |
-| Point-in-time/Bloomberg | `DAT-001`–`DAT-006` | Synthetic adapter fixtures; detailed implementation examples deferred |
+| Point-in-time/Bloomberg | `DAT-001`–`DAT-006` | `specs/0011-bloomberg-data-foundation/` implements §25's realism release R0 = T19-T21 (`DAT-001`-`DAT-004`, `DAT-006`) with a synthetic, fixture-backed adapter; `DAT-005` (calibrated economic estimates) stays `SPECIFIED`, pending §25's realism release R1 = T22-T24 (`specs/0012-expected-economics-realism/`, Proposed). Note the release column above uses `ROADMAPS.md` numbering, in which this same work is R3 — see "Release Numbering" |
 | Multi-period settlement | `MPS-001`–`MPS-003` | Hand-constructed fixtures (`specs/0010-multi-period-settlement/`); no `EXAMPLES.md` worked case exists for a multi-period scenario |
 | Platform integration | `PLT-001`–`PLT-006` | E9 |
 | Agency | `AGY-001`–`AGY-008` | E6 |

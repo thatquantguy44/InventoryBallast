@@ -51,6 +51,24 @@ def test_adapters_layer_imports_stay_within_boundary() -> None:
     assert violations == []
 
 
+_BLOOMBERG_ROOT = _ADAPTERS_ROOT / "bloomberg"
+_KNOWN_BLOOMBERG_MNEMONICS = ("PX_LAST", "ID_BB_GLOBAL", "CRNCY", "EQY_FUND_CRNCY")
+
+
+def test_no_bloomberg_mnemonic_outside_adapter() -> None:
+    """AC-011 (specs/0011-bloomberg-data-foundation/, REQ-008/NFR-002): a real Bloomberg field
+    mnemonic must never appear in this package's source outside adapters/bloomberg/."""
+    offenders: list[str] = []
+    for path in sorted(_PACKAGE_ROOT.rglob("*.py")):
+        if _BLOOMBERG_ROOT in path.parents:
+            continue
+        text = path.read_text(encoding="utf-8")
+        for mnemonic in _KNOWN_BLOOMBERG_MNEMONICS:
+            if mnemonic in text:
+                offenders.append(f"{path.relative_to(_PACKAGE_ROOT)} contains {mnemonic!r}")
+    assert offenders == []
+
+
 def test_pandas_imported_only_by_dataframe_adapter() -> None:
     """REQ-007: adapters/dataframe.py is the sole module in src/inventory_optimizer permitted to
     import pandas."""

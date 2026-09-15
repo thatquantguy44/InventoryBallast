@@ -38,16 +38,18 @@ thin wrapper around both; its own behavior for a single cutoff date is unchanged
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from datetime import date
 
 from inventory_optimizer.domain.demand import DemandForecast
 from inventory_optimizer.domain.enums import TradeEventType
 from inventory_optimizer.domain.inventory import SecurityInventory
 from inventory_optimizer.domain.loans import LoanRoute
+from inventory_optimizer.domain.reference import MarketCalendar
 from inventory_optimizer.domain.requests import OptimizationRequest
 from inventory_optimizer.domain.scenarios import DemandShock, RateShock, Scenario, TradeEvent
 from inventory_optimizer.exceptions import ScenarioApplicationError
+from inventory_optimizer.validation.reconciliation import check_settlement_calendar
 
 _TYPE_PRIORITY: dict[TradeEventType, int] = {
     event_type: position for position, event_type in enumerate(TradeEventType)
@@ -220,17 +222,46 @@ def _apply_demand_shock(shock: DemandShock, demand_by_group: dict[str, DemandFor
     demand_by_group[shock.demand_group_id] = forecast.model_copy(update=update)
 
 
+def _event_currency(baseline: OptimizationRequest, event: TradeEvent) -> str | None:
+    """Resolves the currency of the inventory record an event ultimately touches -- the closest
+    existing "market" identifier this repo's domain contracts carry (specs/0011-bloomberg-data-
+    foundation/plan.md's recorded simplification)."""
+    inventory_id = event.inventory_id
+    if inventory_id is None and event.route_id is not None:
+        route = next((r for r in baseline.routes if r.route_id == event.route_id), None)
+        inventory_id = route.inventory_id if route is not None else None
+    if inventory_id is None:
+        return None
+    inventory = next((i for i in baseline.inventory if i.inventory_id == inventory_id), None)
+    return inventory.currency if inventory is not None else None
+
+
 def apply_scenario(
-    baseline: OptimizationRequest, scenario: Scenario
+    baseline: OptimizationRequest,
+    scenario: Scenario,
+    *,
+    calendars: Mapping[str, MarketCalendar] | None = None,
 ) -> tuple[OptimizationRequest, tuple[str, ...]]:
     """Returns the scenario-modified request and any warnings surfaced while applying it (e.g. an
-    oversold-pending-recall inventory) -- never mutates ``baseline``."""
+    oversold-pending-recall inventory) -- never mutates ``baseline``.
+
+    ``calendars`` (specs/0011-bloomberg-data-foundation/, REQ-013) is optional and keyed by
+    currency (see ``_event_currency``). ``None`` (the default) reproduces this function's pre-0011
+    behavior byte-for-byte: no trade event's ``settlement_date`` is ever checked."""
     _check_no_conflicting_return_recall(scenario.trade_events)
 
     effective_events = select_effective_events(
         scenario.trade_events, after=None, on_or_before=baseline.effective_date
     )
     updated, warnings = apply_events(baseline, effective_events)
+
+    if calendars:
+        dates_and_markets = [
+            (event.settlement_date, currency)
+            for event in effective_events
+            if (currency := _event_currency(baseline, event)) is not None
+        ]
+        warnings = warnings + check_settlement_calendar(dates_and_markets, calendars)
 
     routes_by_id = {route.route_id: route for route in updated.routes}
     demand_by_group = {forecast.demand_group_id: forecast for forecast in updated.demand}

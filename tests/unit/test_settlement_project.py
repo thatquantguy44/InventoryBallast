@@ -11,6 +11,7 @@ import pytest
 
 from inventory_optimizer.domain.enums import SolverStatus, TradeEventType
 from inventory_optimizer.domain.policies import UtilizationPolicy
+from inventory_optimizer.domain.reference import MarketCalendar
 from inventory_optimizer.domain.requests import OptimizationRequest
 from inventory_optimizer.domain.scenarios import TradeEvent
 from inventory_optimizer.facade import InventoryOptimizer
@@ -169,3 +170,60 @@ def test_project_multi_period_rejects_empty_planning_periods(e1_request, default
 
     with pytest.raises(ValueError, match="planning_periods"):
         project_multi_period(e1_request, result, default_config)
+
+
+def test_no_calendar_matches_0010_baseline(
+    inventory_factory, route_factory, demand_factory, default_config
+) -> None:
+    """AC-007/REQ-014 (specs/0011-bloomberg-data-foundation/): omitting ``calendars`` reproduces
+    this function's pre-0011 behavior byte-for-byte -- an invalid period date is accepted
+    unchecked, exactly as 0010's own tests already establish."""
+    inventory = inventory_factory()
+    route = route_factory("RT-A", "DG-A", fee_rate=0.02)
+    demand = demand_factory("DG-A", "BORROWER-RT-A", fee_rate=0.02)
+    saturday = date(2026, 9, 5)
+    request = OptimizationRequest(
+        request_id="REQ-MP-NOCAL",
+        as_of=_AS_OF,
+        effective_date=_EFFECTIVE_DATE,
+        inventory=(inventory,),
+        routes=(route,),
+        demand=(demand,),
+        planning_periods=(saturday,),
+    )
+    optimizer = InventoryOptimizer(config=default_config)
+    result = optimizer.optimize(request)
+
+    projection = project_multi_period(request, result, default_config)
+    assert projection.warnings == ()
+
+    projection_explicit_none = project_multi_period(
+        request, result, default_config, calendars=None
+    )
+    assert projection_explicit_none == projection
+
+
+def test_calendar_rejects_invalid_period_date(
+    inventory_factory, route_factory, demand_factory, default_config
+) -> None:
+    """AC-007: a supplied calendar surfaces a warning for a period landing on an invalid
+    settlement day, keyed by currency (the recorded simplification)."""
+    inventory = inventory_factory(currency="USD")
+    route = route_factory("RT-A", "DG-A", fee_rate=0.02)
+    demand = demand_factory("DG-A", "BORROWER-RT-A", fee_rate=0.02)
+    saturday = date(2026, 9, 5)
+    request = OptimizationRequest(
+        request_id="REQ-MP-CAL",
+        as_of=_AS_OF,
+        effective_date=_EFFECTIVE_DATE,
+        inventory=(inventory,),
+        routes=(route,),
+        demand=(demand,),
+        planning_periods=(saturday,),
+    )
+    optimizer = InventoryOptimizer(config=default_config)
+    result = optimizer.optimize(request)
+
+    calendar = MarketCalendar(market="US", currency="USD")
+    projection = project_multi_period(request, result, default_config, calendars={"USD": calendar})
+    assert any(saturday.isoformat() in warning for warning in projection.warnings)
