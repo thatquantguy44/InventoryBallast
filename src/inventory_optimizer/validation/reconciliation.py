@@ -219,6 +219,8 @@ def check_recall_notice_sufficiency(request: OptimizationRequest) -> tuple[Valid
     for idx, event in enumerate(request.known_future_events):
         if event.event_type is not TradeEventType.RECALL:
             continue
+        if event.route_id is None:
+            continue
         route = routes_by_id.get(event.route_id)
         if route is None:
             continue  # unresolved route_id is already reported by check_foreign_keys

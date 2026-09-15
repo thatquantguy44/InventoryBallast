@@ -22,13 +22,23 @@ from collections.abc import Mapping
 from datetime import date
 from types import MappingProxyType
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, JsonValue, field_serializer, model_validator
+from pydantic import (
+    AwareDatetime,
+    BaseModel,
+    ConfigDict,
+    Field,
+    JsonValue,
+    field_serializer,
+    model_validator,
+)
 
 from inventory_optimizer.domain.demand import DemandForecast
+from inventory_optimizer.domain.economics import ExpectedEconomics
 from inventory_optimizer.domain.enums import ProblemFamily
 from inventory_optimizer.domain.inventory import SecurityInventory
 from inventory_optimizer.domain.loans import LoanRoute
 from inventory_optimizer.domain.policies import CounterpartyLimit, UtilizationPolicy
+from inventory_optimizer.domain.reference import EntityRelationship, PointInTimeValue
 from inventory_optimizer.domain.scenarios import TradeEvent
 
 
@@ -63,6 +73,8 @@ class OptimizationRequest(BaseModel):
     demand: tuple[DemandForecast, ...]
     counterparty_limits: tuple[CounterpartyLimit, ...] = ()
     utilization_policies: tuple[UtilizationPolicy, ...] = ()
+    expected_economics: tuple[ExpectedEconomics, ...] = ()
+    entity_relationships: tuple[PointInTimeValue[EntityRelationship], ...] = ()
     planning_periods: tuple[date, ...] = ()
     known_future_events: tuple[TradeEvent, ...] = ()
     config_overrides: Mapping[str, JsonValue] = Field(default_factory=lambda: MappingProxyType({}))
@@ -84,7 +96,7 @@ class OptimizationRequest(BaseModel):
                 f"planning_periods must all be strictly later than effective_date "
                 f"({self.effective_date!r}); got {periods!r}"
             )
-        for previous, current in zip(periods, periods[1:]):
+        for previous, current in zip(periods, periods[1:], strict=False):
             if current <= previous:
                 raise ValueError(
                     f"planning_periods must be strictly increasing and free of duplicates "
@@ -95,4 +107,7 @@ class OptimizationRequest(BaseModel):
                 "known_future_events requires a non-empty planning_periods -- otherwise none of "
                 "these events could ever be applied"
             )
+        estimate_route_ids = [estimate.route_id for estimate in self.expected_economics]
+        if len(estimate_route_ids) != len(set(estimate_route_ids)):
+            raise ValueError("expected_economics route_id values must be unique")
         return self

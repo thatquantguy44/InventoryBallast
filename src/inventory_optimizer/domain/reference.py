@@ -2,9 +2,10 @@
 
 ``PointInTimeValue[T]`` is the one envelope every enriched value in this workstream is wrapped in;
 ``SecurityReference`` and ``MarketCalendar`` are the two payload contracts Realism release R0
-(T19-T21) needs. Section 22.3's other required contracts (``EntityRelationship``, ``MarketState``,
-``LiquidityEstimate``, ``FundHolding``) are R1+ concepts (T22-T24) and are deliberately not
-declared here -- see ``specs/0011-bloomberg-data-foundation/spec.md``'s Non-Goals.
+(T19-T21) needs. ``EntityRelationship`` lands with the R1 entity-hierarchy slice (T22) so borrower
+limits can aggregate across approved legal entities without adding a second point-in-time envelope.
+Section 22.3's other required contracts (``MarketState``, ``LiquidityEstimate``, ``FundHolding``)
+remain R1+ concepts declared alongside their consuming slices.
 
 Every value carries its own knowledge/effective time and provenance so
 ``enrichment.point_in_time.resolve_latest_known`` can answer "what was known, and true, as of when"
@@ -20,7 +21,7 @@ from datetime import date
 from enum import StrEnum
 from typing import Generic, TypeVar
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, model_validator
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
 
 T = TypeVar("T")
 
@@ -90,6 +91,22 @@ class SecurityReference(BaseModel):
     settlement_status: str | None = None
     lot_size: float | None = None
     tick_size: float | None = None
+
+
+class EntityRelationship(BaseModel):
+    """Section 22.3/22.9 borrower hierarchy payload.
+
+    Effective dates, observation time, source lineage, and data quality stay on the surrounding
+    ``PointInTimeValue`` envelope; this payload only names the hierarchy relationship itself.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    entity_id: str
+    legal_entity_id: str
+    ultimate_parent_id: str
+    relationship_type: str
+    ownership_confidence: float = Field(ge=0.0, le=1.0, allow_inf_nan=False)
 
 
 class MarketCalendar(BaseModel):

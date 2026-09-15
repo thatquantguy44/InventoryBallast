@@ -61,9 +61,9 @@ def compile_lp(request: OptimizationRequest, config: InventoryOptimizerConfig) -
     # minimum_active_quantity_shares/maximum_active_routes (use formulation.mip.compile_mip) or a
     # positive allocation_stability_penalty (use formulation.qp.compile_qp) -- or
     # InventoryOptimizer.optimize(), which routes to either automatically.
-    issues = mip_required_issues(request) + qp_required_issues(config)
-    if issues:
-        raise InputValidationError(issues)
+    formulation_issues = mip_required_issues(request) + qp_required_issues(config)
+    if formulation_issues:
+        raise InputValidationError(formulation_issues)
 
     context = build_context(request, config)
     builder = SparseBuilder(context.variable_index)
@@ -78,11 +78,11 @@ def compile_lp(request: OptimizationRequest, config: InventoryOptimizerConfig) -
         for kind, registration in resolved
     ]
 
-    issues: list[ValidationIssue] = []
+    validation_issues: list[ValidationIssue] = []
     for _, _, instance in instances:
-        issues.extend(instance.validate(context))
-    if issues:
-        raise InputValidationError(tuple(issues))
+        validation_issues.extend(instance.validate(context))
+    if validation_issues:
+        raise InputValidationError(tuple(validation_issues))
 
     for kind, _, instance in instances:
         if kind is ComponentKind.CONSTRAINT:

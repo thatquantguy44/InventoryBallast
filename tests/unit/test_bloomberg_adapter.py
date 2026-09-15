@@ -7,6 +7,7 @@ from datetime import UTC, date, datetime
 from inventory_optimizer.adapters.bloomberg.corporate_actions import (
     SyntheticCorporateActionsAdapter,
 )
+from inventory_optimizer.adapters.bloomberg.entities import SyntheticEntityDataAdapter
 from inventory_optimizer.adapters.bloomberg.field_mapping import ConceptMapping, FieldMapping
 from inventory_optimizer.adapters.bloomberg.reference import SyntheticReferenceDataAdapter
 from inventory_optimizer.domain.events import (
@@ -16,12 +17,14 @@ from inventory_optimizer.domain.events import (
 )
 from inventory_optimizer.domain.reference import (
     DataQuality,
+    EntityRelationship,
     MarketCalendar,
     PointInTimeValue,
     SecurityReference,
     TradingStatus,
 )
 from inventory_optimizer.ports.corporate_actions import CorporateActionsPort
+from inventory_optimizer.ports.entity_data import EntityDataPort
 from inventory_optimizer.ports.reference_data import ReferenceDataPort
 
 _T0 = datetime(2026, 1, 1, tzinfo=UTC)
@@ -42,6 +45,11 @@ _MAPPING = FieldMapping(
 def test_synthetic_reference_adapter_satisfies_the_port_protocol() -> None:
     adapter = SyntheticReferenceDataAdapter(field_mapping=_MAPPING)
     assert isinstance(adapter, ReferenceDataPort)
+
+
+def test_synthetic_entity_adapter_satisfies_the_port_protocol() -> None:
+    adapter = SyntheticEntityDataAdapter(field_mapping=_MAPPING)
+    assert isinstance(adapter, EntityDataPort)
 
 
 def test_synthetic_reference_adapter_resolves_security_reference() -> None:
@@ -70,6 +78,32 @@ def test_synthetic_reference_adapter_resolves_security_reference() -> None:
     assert found is not None
     assert found.value.trading_status == TradingStatus.ACTIVE
     assert adapter.get_security_reference("SEC-UNKNOWN", as_of=_T0, known_as_of=_T0) is None
+
+
+def test_synthetic_entity_adapter_resolves_relationship() -> None:
+    relationship = PointInTimeValue[EntityRelationship](
+        value=EntityRelationship(
+            entity_id="BORROWER-1",
+            legal_entity_id="LE-1",
+            ultimate_parent_id="PARENT-1",
+            relationship_type="borrower_to_parent",
+            ownership_confidence=0.95,
+        ),
+        observed_at=_T0,
+        effective_from=_T0,
+        effective_to=None,
+        source="fixture",
+        source_version="v1",
+        field_mapping_version="v1",
+        quality=DataQuality.VERIFIED,
+    )
+    adapter = SyntheticEntityDataAdapter(
+        field_mapping=_MAPPING, entity_relationships={"BORROWER-1": (relationship,)}
+    )
+    found = adapter.get_entity_relationship("BORROWER-1", as_of=_T0, known_as_of=_T0)
+    assert found is not None
+    assert found.value.ultimate_parent_id == "PARENT-1"
+    assert adapter.get_entity_relationship("UNKNOWN", as_of=_T0, known_as_of=_T0) is None
 
 
 def test_synthetic_reference_adapter_resolves_market_calendar() -> None:

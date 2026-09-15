@@ -20,6 +20,7 @@ validation:
   balance_tolerance_shares: 1.0e-6
   max_staleness_hours: 24.0
   duplicate_id_policy: reject
+  minimum_entity_confidence: 0.8
 
 solver:
   backend: highs

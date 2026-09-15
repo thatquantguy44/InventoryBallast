@@ -40,11 +40,17 @@ from dataclasses import dataclass
 from typing import TypeVar
 
 from inventory_optimizer.config.models import ElasticityConfig, InventoryOptimizerConfig
+from inventory_optimizer.domain.economics import ExpectedEconomics
 from inventory_optimizer.domain.inventory import SecurityInventory
 from inventory_optimizer.domain.loans import LoanRoute
 from inventory_optimizer.domain.policies import UtilizationPolicy
 from inventory_optimizer.domain.requests import OptimizationRequest
 from inventory_optimizer.elasticity import EvaluatedDemand, evaluate_demand_cap
+from inventory_optimizer.enrichment.entity_hierarchy import (
+    HierarchyResolution,
+    HierarchyResolutionStatus,
+    resolve_hierarchy,
+)
 from inventory_optimizer.formulation.indexes import VariableIndex
 from inventory_optimizer.formulation.variables import build_variable_index
 
@@ -76,6 +82,12 @@ class BuildContext:
     routes_by_inventory: Mapping[str, tuple[LoanRoute, ...]]
     routes_by_demand_group: Mapping[str, tuple[LoanRoute, ...]]
     routes_by_borrower: Mapping[str, tuple[LoanRoute, ...]]
+    entity_hierarchy_by_borrower: Mapping[str, HierarchyResolution]
+    routes_by_entity: Mapping[str, tuple[LoanRoute, ...]]
+    routes_by_ultimate_parent: Mapping[str, tuple[LoanRoute, ...]]
+    expected_economics_by_route: Mapping[str, ExpectedEconomics]
+    expected_active_fractions: Mapping[str, float]
+    expected_costs: Mapping[str, float]
     activation_route_ids: frozenset[str]
     lot_size_route_ids: frozenset[str]
     tiered_demand_group_ids: frozenset[str]
@@ -157,6 +169,78 @@ def _compute_activation_route_ids(
     return frozenset(route_ids)
 
 
+def _compute_entity_hierarchy_by_borrower(
+    request: OptimizationRequest, config: InventoryOptimizerConfig
+) -> dict[str, HierarchyResolution]:
+    borrower_ids = {route.borrower_id for route in request.routes}
+    return {
+        borrower_id: resolve_hierarchy(
+            borrower_id,
+            request.entity_relationships,
+            as_of=request.as_of,
+            known_as_of=request.as_of,
+            minimum_confidence=config.validation.minimum_entity_confidence,
+        )
+        for borrower_id in borrower_ids
+    }
+
+
+def _compute_routes_by_entity(
+    routes: Iterable[LoanRoute],
+    hierarchy_by_borrower: Mapping[str, HierarchyResolution],
+    *,
+    parent: bool,
+) -> dict[str, tuple[LoanRoute, ...]]:
+    grouped: dict[str, list[LoanRoute]] = defaultdict(list)
+    for route in routes:
+        resolution = hierarchy_by_borrower[route.borrower_id]
+        if resolution.status is not HierarchyResolutionStatus.RESOLVED:
+            continue
+        scope_id = resolution.ultimate_parent_id if parent else resolution.legal_entity_id
+        if scope_id is not None:
+            grouped[scope_id].append(route)
+    return {scope_id: tuple(values) for scope_id, values in grouped.items()}
+
+
+def _clamp_unit_interval(value: float) -> float:
+    return min(1.0, max(0.0, value))
+
+
+def _expected_economics_by_route(
+    request: OptimizationRequest,
+) -> dict[str, ExpectedEconomics]:
+    return {estimate.route_id: estimate for estimate in request.expected_economics}
+
+
+def _compute_expected_active_fractions(
+    estimates_by_route: Mapping[str, ExpectedEconomics],
+    *,
+    planning_horizon_days: int,
+) -> dict[str, float]:
+    return {
+        route_id: _clamp_unit_interval(
+            estimate.take_up_probability
+            * estimate.conditional_expected_days_active
+            / planning_horizon_days
+        )
+        for route_id, estimate in estimates_by_route.items()
+    }
+
+
+def _compute_expected_costs(
+    estimates_by_route: Mapping[str, ExpectedEconomics],
+) -> dict[str, float]:
+    return {
+        route_id: (
+            estimate.manufactured_payment_cost_usd
+            + estimate.indemnification_capital_cost_usd
+            + estimate.settlement_fail_cost_usd
+            - estimate.relationship_value_or_cost_usd
+        )
+        for route_id, estimate in estimates_by_route.items()
+    }
+
+
 def build_context(request: OptimizationRequest, config: InventoryOptimizerConfig) -> BuildContext:
     """Assemble a ``BuildContext`` from a request and config -- the same shape
     ``formulation.lp.compile_lp``/``formulation.mip.compile_mip`` build internally, exposed so any
@@ -169,6 +253,8 @@ def build_context(request: OptimizationRequest, config: InventoryOptimizerConfig
     )
     tier_caps = _compute_tier_caps(request, config.elasticity)
     tiered_demand_group_ids = frozenset(tier_caps)
+    entity_hierarchy_by_borrower = _compute_entity_hierarchy_by_borrower(request, config)
+    estimates_by_route = _expected_economics_by_route(request)
 
     tier_ids = [
         tier_scope_id(group_id, tier_index)
@@ -203,6 +289,19 @@ def build_context(request: OptimizationRequest, config: InventoryOptimizerConfig
         routes_by_inventory=routes_by_inventory,
         routes_by_demand_group=_group_by(request.routes, key=lambda route: route.demand_group_id),
         routes_by_borrower=_group_by(request.routes, key=lambda route: route.borrower_id),
+        entity_hierarchy_by_borrower=entity_hierarchy_by_borrower,
+        routes_by_entity=_compute_routes_by_entity(
+            request.routes, entity_hierarchy_by_borrower, parent=False
+        ),
+        routes_by_ultimate_parent=_compute_routes_by_entity(
+            request.routes, entity_hierarchy_by_borrower, parent=True
+        ),
+        expected_economics_by_route=estimates_by_route,
+        expected_active_fractions=_compute_expected_active_fractions(
+            estimates_by_route,
+            planning_horizon_days=config.formulation.planning_horizon_days,
+        ),
+        expected_costs=_compute_expected_costs(estimates_by_route),
         activation_route_ids=activation_route_ids,
         lot_size_route_ids=lot_size_route_ids,
         tiered_demand_group_ids=tiered_demand_group_ids,

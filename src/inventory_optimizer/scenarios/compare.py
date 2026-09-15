@@ -39,7 +39,9 @@ def _trade_affected_route_ids(
         event.inventory_id for event in effective if event.event_type in _SUPPLY_REDUCING_TYPES
     }
     directly_targeted_route_ids = {
-        event.route_id for event in effective if event.event_type in _ROUTE_REDUCING_TYPES
+        event.route_id
+        for event in effective
+        if event.event_type in _ROUTE_REDUCING_TYPES and event.route_id is not None
     }
     routes_sharing_reduced_inventory = {
         route.route_id
