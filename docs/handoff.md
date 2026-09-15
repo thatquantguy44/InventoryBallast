@@ -618,10 +618,11 @@ transformation/election handling); `MarketState`/`LiquidityEstimate`/`FundHoldin
 features; and the separate, unrelated DocumentRefinery/eligibility-collateral track described
 below (T29-T32) — same bitemporal pattern, different data domain, no shared dependency.
 
-### Bloomberg-enriched realism, Realism release R1 (`01_SPEC.md` §22.5/§22.7/§22.9; T22-T24) — proposed, pending owner sign-off (2026-09-14)
+### Bloomberg-enriched realism, Realism release R1 (`01_SPEC.md` §22.5/§22.7/§22.9; T22-T24) — approved 2026-09-15, implementation not started
 
 `specs/0012-expected-economics-realism/` (`spec.md`, `plan.md`, `tasks.md`) — scoped 2026-09-14,
-immediately after `0011` shipped. **No code has been written; `spec.md`'s Status is `Proposed`.**
+approved 2026-09-15 after all four open questions were resolved. **No code has been written yet;
+T-001 is clear to begin.**
 
 Scope: T22-T24, which `01_SPEC.md` §26 says "form R1" and §25 calls "Expected economics." The
 headline consequence, in §25's own words: "R1 is required before presenting model economics as
@@ -649,12 +650,24 @@ optimizer reports is a contractual run-rate number.
    Only T24's piecewise-linear unwind cost (`PWL_i(v_i; knots)`) needs segment variables this repo
    has never built — the spec proposes deferring it to its own spec.
 
-**Four open questions block implementation start** (see `spec.md`'s Assumptions & Open Questions):
-1. Shadow-mode default, or optimize on expected economics directly?
-2. Defer T24's piecewise-linear unwind cost to its own spec? (Recommended.)
-3. Confirm §22.9's **fail-closed** rule for low-confidence entity mappings — a deliberate departure
-   from `0011`'s warnings posture, on the principle that a credit limit is a control while a
-   data-quality observation is a disclosure.
+**All four open questions were resolved by the owner (2026-09-15)** — recorded in full in
+`spec.md`'s Assumptions & Open Questions:
+1. **Shadow/compare mode is the default**; `expected` mode is an explicit opt-in, since letting
+   these numbers drive allocation is exactly what gate `G3` approves.
+2. **T24's piecewise-linear unwind cost is deferred to its own spec** — the only piece needing new
+   formulation machinery.
+3. **§22.9's fail-closed rule stands**, refined in three parts: (a) the rejection is **narrowed** to
+   mappings that actually feed a `hard` entity-scoped limit, with the *missing*-mapping case staying
+   conservative because absence cannot prove a borrower falls outside a group; (b) **internal
+   approval, not vendor confidence, authorizes** hard aggregation — a 0.99 confidence score with no
+   approval is unusable, an approved 0.40 mapping is usable; (c) **no conservative-inclusion escape
+   hatch**, since `hard = False` already says "this control is advisory" honestly.
+   The principle separating this from `0011`'s warnings, worth reusing: **warn when a check only
+   annotates an answer the optimizer would have produced anyway; fail closed when the uncertain
+   data determines the content of a constraint.** `0011`'s checks change no bound; an entity
+   mapping changes the feasible region, and its failure mode is asymmetric — omission silently
+   *relaxes* a credit limit, and `validation.solution_verifier` cannot catch it because it
+   recomputes rows from `CompiledProblem` and so checks arithmetic, not intent.
 4. A **documentation defect**: the engine spec carries two incompatible "R" numbering schemes —
    `01_SPEC.md` §25's realism releases (R0 = data correctness, R1 = expected economics) and
    `ROADMAPS.md` §2's delivery roadmap (R0 = portable package, R1 = verified baseline LP, **R3 =
