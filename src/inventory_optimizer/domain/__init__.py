@@ -13,6 +13,7 @@ agency/prime records (``BeneficialOwnerMandate``, ``InventorySource``, ``ClientS
 """
 
 from inventory_optimizer.domain.demand import DemandForecast
+from inventory_optimizer.domain.economics import ExpectedEconomics
 from inventory_optimizer.domain.enums import (
     Capability,
     DayCountBasis,
@@ -27,6 +28,7 @@ from inventory_optimizer.domain.enums import (
 from inventory_optimizer.domain.inventory import SecurityInventory
 from inventory_optimizer.domain.loans import LoanRoute
 from inventory_optimizer.domain.policies import CounterpartyLimit, UtilizationPolicy
+from inventory_optimizer.domain.reference import EntityRelationship, PointInTimeValue
 from inventory_optimizer.domain.requests import DeskContext, OptimizationRequest
 from inventory_optimizer.domain.results import OptimizationResult
 
@@ -37,11 +39,14 @@ __all__ = [
     "DemandForecast",
     "DeskContext",
     "ElasticityCurveType",
+    "EntityRelationship",
+    "ExpectedEconomics",
     "Formulation",
     "LoanRoute",
     "ObjectiveSense",
     "OptimizationRequest",
     "OptimizationResult",
+    "PointInTimeValue",
     "ProblemFamily",
     "QuantityType",
     "ReasonCode",

@@ -265,10 +265,10 @@ def apply_scenario(
 
     routes_by_id = {route.route_id: route for route in updated.routes}
     demand_by_group = {forecast.demand_group_id: forecast for forecast in updated.demand}
-    for shock in scenario.rate_shocks:
-        _apply_rate_shock(shock, routes_by_id)
-    for shock in scenario.demand_shocks:
-        _apply_demand_shock(shock, demand_by_group)
+    for rate_shock in scenario.rate_shocks:
+        _apply_rate_shock(rate_shock, routes_by_id)
+    for demand_shock in scenario.demand_shocks:
+        _apply_demand_shock(demand_shock, demand_by_group)
 
     scenario_request = updated.model_copy(
         update={

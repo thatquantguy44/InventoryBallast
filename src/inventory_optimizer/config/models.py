@@ -43,6 +43,7 @@ class ValidationConfig(BaseModel):
     balance_tolerance_shares: float = Field(default=1e-6, ge=0.0)
     max_staleness_hours: float = Field(default=24.0, ge=0.0)
     duplicate_id_policy: str = "reject"
+    minimum_entity_confidence: float = Field(default=0.8, ge=0.0, le=1.0)
 
 
 class SolverConfig(BaseModel):

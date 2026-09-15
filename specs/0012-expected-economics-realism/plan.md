@@ -1,13 +1,11 @@
 # Plan: Expected economics and entity-hierarchy realism (Realism release R1)
 
 - **Spec:** 0012-expected-economics-realism (`spec.md`)
-- **Status:** Draft — blocked on spec approval and the four open questions in `spec.md`'s
-  Assumptions & Open Questions
+- **Status:** Approved plan — ready for implementation
 - **Author:** Joshua Lutkemuller, CFA (drafted by Claude Code)
-- **Last updated:** 2026-09-14
+- **Last updated:** 2026-09-15
 
-> HOW. This plan requires an approved `spec.md`. Every requirement in the spec must appear in the
-> traceability matrix below. Do not start T-001 until `spec.md`'s Status reads `Approved`.
+> HOW. Every requirement in the spec must appear in the traceability matrix below.
 
 ## Approach
 
@@ -21,8 +19,10 @@ reverted separately:
 | B — expected economics (T23) | `fee_revenue_coefficient()`'s one formula | none |
 | C — dynamic buffer (T24, buffer half) | `ReserveBufferConstraint`'s `max(...)` | none |
 
-Every new input is optional and absent by default; the default `economics_mode` is `contractual`.
-With nothing supplied the compiled problem is byte-identical to today (NFR-001) — the same
+Every new input is optional and absent by default; the default `economics_mode` is
+`expected_shadow`, which uses contractual coefficients for allocation and reports expected
+economics only when estimates are supplied. With nothing supplied the compiled problem is
+byte-identical to today (NFR-001) — the same
 zero-cost-when-absent property `0006`'s `z`/`n` blocks, `0009`'s tier blocks, `0010`'s
 calendar-free settlement, and `0011`'s enrichment mappings each hold.
 
@@ -138,18 +138,27 @@ stays meaningful).
 ```python
 class ObjectiveConfig(BaseModel):
     allocation_stability_penalty: float = 0.0
-    economics_mode: Literal["contractual", "expected"] = "contractual"
+    economics_mode: Literal[
+        "expected_shadow",
+        "expected_direct",
+        "contractual",
+    ] = "expected_shadow"
 ```
 
-- `contractual` (default): the compiled objective is exactly today's. If estimates are supplied,
-  `facade.optimize()` additionally computes — post-solve, from the *already-solved* quantities —
-  what the expected economics of that same allocation would be, and attaches it as a comparison
-  section. **No coefficient, bound, or allocation changes.** This is deliberately the same shape as
-  `0010`'s projection: report against a solved result rather than re-optimizing.
-- `expected`: `expected_active_fraction` reaches the coefficient, allocations genuinely differ, and
-  every route must carry an `ExpectedEconomics` record or compilation fails closed (REQ-010) —
-  mixing expected and contractual coefficients across routes in one objective would make the
-  objective uninterpretable.
+- `expected_shadow` (default): the compiled objective is exactly today's contractual objective. If
+  estimates are supplied, `facade.optimize()` additionally computes — post-solve, from the
+  *already-solved* quantities — what the expected economics of that same allocation would be, and
+  attaches it as a comparison section. **No coefficient, bound, or allocation changes.** This is
+  deliberately the same shape as `0010`'s projection: report against a solved result rather than
+  re-optimizing.
+- `expected_direct`: `expected_active_fraction` reaches the coefficient, allocations genuinely
+  differ, and every route must carry an `ExpectedEconomics` record or compilation fails closed
+  (REQ-010) — mixing expected and contractual coefficients across routes in one objective would
+  make the objective uninterpretable. This mode is the repo-side representation of G3 having been
+  granted for the relevant use.
+- `contractual`: contractual-only solve and contractual-only result economics. This keeps an
+  explicit controlled-comparison mode for desks or tests that want no shadow section even when
+  estimates are present.
 
 **Disclosure (REQ-011).** A new defaulted `OptimizationResult.economics` section names the mode and
 lists, per route, `model_version` / `calibration_date` / `uncertainty` for each estimate used, plus
@@ -189,11 +198,11 @@ surface.
   do; Slice C's buffer is consumed the day it lands.
 - **Correct by construction:** no-look-ahead is inherited from `0011` rather than reimplemented
   (REQ-002); attribution consistency is structural via one shared coefficient function (REQ-007).
-- **Honest reporting:** `expected` mode is off by default, disclosed when on, and G3 is explicitly
-  not granted by anything here (NFR-004). Shadow mode reports both numbers rather than replacing
-  one with the other.
-- **No silent trade-offs:** the PWL deferral, the shadow-vs-expected default, the fail-closed
-  entity rule, and the R-numbering defect are all raised as open questions, not decided quietly.
+- **Honest reporting:** `expected_direct` mode is off by default, disclosed when on, and G3 is
+  explicitly not granted by anything here (NFR-004). Default `expected_shadow` mode reports both
+  numbers rather than replacing one with the other.
+- **No silent trade-offs:** the PWL deferral, the fail-closed entity rule, the R-numbering
+  correction, and the shadow-vs-direct expected economics choice are recorded as owner decisions.
 
 ## Traceability Matrix
 
@@ -253,13 +262,15 @@ surface.
 ## Rollout, Observability & Rollback
 
 - Purely additive. Rollback is reverting the three slices independently; no migration, no config
-  rewrite (a config predating `economics_mode` is valid and means `contractual`).
+  rewrite (a config predating `economics_mode` is valid and means `expected_shadow`, which is
+  byte-identical to today's contractual solve when no estimates are supplied).
 - The disclosure section is the operational surface a G3 review would read: mode, per-route model
   versions, calibration dates, uncertainty, and the shadow comparison.
 - No new dependency: every computation here is arithmetic over existing contracts.
 
-## Open Questions
+## Owner Decisions
 
-See `spec.md`'s Assumptions & Open Questions — four, repeated there in full: the shadow-vs-expected
-default, deferring T24's PWL unwind cost, confirming the fail-closed entity rule, and the
-dual-R-numbering documentation defect (with the `0011` mis-tag this spec's T-013 corrects).
+See `spec.md`'s Decisions & Assumptions. All approval-blocking questions are resolved: support both
+default `expected_shadow` and explicit `expected_direct`; defer T24's PWL unwind cost to a future
+spec; fail closed for hard entity-scoped limits with unresolved, low-confidence, or conflicting
+mappings; and accept the dual-R-numbering documentation correction that T-013 will apply.

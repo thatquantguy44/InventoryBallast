@@ -1,10 +1,10 @@
 # Spec: Expected economics and entity-hierarchy realism (Realism release R1 — T22-T24)
 
 - **ID:** 0012-expected-economics-realism
-- **Status:** Proposed — pending owner review (four open questions; not yet approved for implementation)
+- **Status:** Approved — owner decisions resolved; ready for implementation
 - **Author:** Joshua Lutkemuller, CFA (drafted by Claude Code)
-- **Approver:** pending
-- **Last updated:** 2026-09-14
+- **Approver:** Joshua Lutkemuller, CFA
+- **Last updated:** 2026-09-15
 
 > WHAT and WHY only. No implementation detail — that belongs in `plan.md`.
 
@@ -46,14 +46,15 @@ the same one R0 took for enrichment. This spec therefore delivers the input cont
 objective wiring, the switch, and the disclosure; the estimator itself is upstream and out of
 scope.
 
-**2. Turning expected economics on is a named governance gate this repo cannot grant.**
+**2. Letting expected economics drive allocation is a named governance gate this repo cannot grant.**
 `ROADMAPS.md` §7 defines **G3 — "Expected-economics model promotion," owner group "Quant research +
 model risk + business."** `TRACEABILITY.md`'s `DAT-005` row carries that same `G3` tag. This is
 exactly the situation `PLT-002` already documents for its own `G2C` gate — the code can be complete
 while the release approval sits with people outside this repository. §22.5 anticipates the
 mechanism: each coefficient carries "a switch allowing the simpler contractual value for controlled
-comparison." So expected economics must ship **off by default**, with switching it on an explicit,
-disclosed act rather than a silent upgrade.
+comparison." So direct expected-economics optimization must ship **off by default**, with switching
+it on an explicit, disclosed act rather than a silent upgrade; shadow reporting is the default
+evidence surface.
 
 **3. Only one piece of T24 needs new formulation machinery; everything else extends what exists.**
 Verified against the code:
@@ -70,10 +71,10 @@ Because `fee_revenue_coefficient` is shared by `contribute()`, `attribute()`,
 all four in agreement by construction rather than by four parallel edits — the same property that
 made `0010`'s per-period day count safe.
 
-This spec proposes taking the three no-new-machinery pieces and **deferring T24's PWL unwind cost
-to its own spec** (see Non-Goals and Open Questions): it is the only piece that needs a convexity
-argument, breakpoint disclosure (§14.3), and its own benchmark, and bundling it here would put a
-formulation change and an economics change in one review.
+This spec takes the three no-new-machinery pieces and **defers T24's PWL unwind cost to its own
+future spec**: it is the only piece that needs a convexity argument, breakpoint disclosure (§14.3),
+and its own benchmark, and bundling it here would put a formulation change and an economics change
+in one review.
 
 ## Goals
 
@@ -90,20 +91,22 @@ formulation change and an economics change in one review.
 - Apply `expected_active_fraction` and the additive expected cost terms through
   `fee_revenue_coefficient`'s single choke point, so objective, attribution, independent
   verification, and explanations stay consistent automatically.
-- Ship a **shadow/compare mode as the default**: report what expected economics *would* say
-  alongside a contractual solve, without changing a single allocation — the G3-safe posture, and
-  the same "report before you optimize" sequencing `0010` used for projection-before-joint-LP.
-- Make optimizing *on* expected economics an explicit config act (the repo-side representation of
-  G3 having been granted), disclosed in the result, failing closed if estimates are missing.
+- Ship **expected-economics shadow/compare mode as the default**: report what expected economics
+  *would* say alongside a contractual solve, without changing a single allocation — the G3-safe
+  posture, and the same "report before you optimize" sequencing `0010` used for
+  projection-before-joint-LP.
+- Also support **direct expected-economics optimization** as an explicit config act (the repo-side
+  representation of G3 having been granted), disclosed in the result, failing closed if estimates
+  are missing.
 - Add an optional per-inventory `DynamicBuffer` input with §22.7's five named components, folded
   into `ReserveBufferConstraint`'s existing `max(...)`, and report which component bound.
 - Keep the compiled problem a pure LP throughout (NFR-005).
 
 ## Non-Goals
 
-- **T24's piecewise-linear liquidity/unwind cost** (§22.7's `PWL_i(v_i; knots)`). Proposed for its
-  own spec — the only piece needing new formulation machinery, a convexity argument, and §14.3's
-  breakpoint disclosure. Raised as Open Question 2 rather than decided unilaterally.
+- **T24's piecewise-linear liquidity/unwind cost** (§22.7's `PWL_i(v_i; knots)`). Deferred to its
+  own future spec — the only piece needing new formulation machinery, a convexity argument, and
+  §14.3's breakpoint disclosure.
 - **Estimating anything.** No hazard model, no take-up model, no calibration routine, no feature
   pipeline. Estimates are inputs with lineage (§22.13). A repo-side estimator would be exactly the
   "opaque feature dataframe" §22.13 forbids.
@@ -130,23 +133,23 @@ formulation change and an economics change in one review.
 | REQ-005 | The system shall add an optional per-route `ExpectedEconomics` input carrying §22.5's coefficients (`take_up_probability`, `conditional_expected_days_active`, `return_hazard`, `repricing_hazard`, `recall_failure_probability`, `manufactured_payment_cost_usd`, `indemnification_capital_cost_usd`, `settlement_fail_cost_usd`, `relationship_value_or_cost_usd`), each accompanied by model version, calibration date, and an uncertainty measure. | must |
 | REQ-006 | The system shall compute `expected_active_fraction_j = take_up_probability_j * conditional_expected_days_active_j / planning_horizon_days` per §22.5, clamped to `[0, 1]`, and expose it through `formulation.context.BuildContext` as a precomputed value — never estimated during compilation. | must |
 | REQ-007 | `fee_revenue_coefficient` shall accept the expected-economics factor and additive cost terms as optional parameters, so `contribute()`, `attribute()`, `validation.solution_verifier`, and `reporting.explanations` all derive from one formula; omitting them shall reproduce today's contractual coefficient exactly. | must |
-| REQ-008 | The system shall add a config switch (`ObjectiveConfig.economics_mode`, default `contractual`) selecting which economics drive the objective, per §22.5's required "switch allowing the simpler contractual value for controlled comparison". | must |
-| REQ-009 | In the default `contractual` mode, when expected-economics estimates are supplied, the system shall report expected revenue **alongside** the contractual result without altering any allocation, quantity, or objective coefficient — a shadow comparison, not a solve. | must |
-| REQ-010 | In `expected` mode, the system shall fail closed with a structured issue when any route lacks an `ExpectedEconomics` record, rather than silently mixing expected and contractual coefficients across routes. | must |
+| REQ-008 | The system shall add a config switch (`ObjectiveConfig.economics_mode`, default `expected_shadow`) with three explicit values: `expected_shadow` for the default contractual solve plus expected comparison, `expected_direct` for direct expected-economics optimization, and `contractual` for a contractual-only solve. This satisfies §22.5's required "switch allowing the simpler contractual value for controlled comparison". | must |
+| REQ-009 | In the default `expected_shadow` mode, when expected-economics estimates are supplied, the system shall report expected revenue **alongside** the contractual result without altering any allocation, quantity, or objective coefficient — a shadow comparison, not a solve. | must |
+| REQ-010 | In `expected_direct` mode, the system shall fail closed with a structured issue when any route lacks an `ExpectedEconomics` record, rather than silently mixing expected and contractual coefficients across routes. | must |
 | REQ-011 | The result shall disclose which economics mode drove the objective and, per route, the model version and calibration date of every estimate used — satisfying §22.13's "validated predictions and uncertainty" boundary and giving a G3 review its evidence surface. | must |
 | REQ-012 | The system shall add an optional per-inventory `DynamicBuffer` input carrying §22.7's five named components (`legal_minimum`, `pending_settlement_need`, `demand_uncertainty_quantile`, `event_recall_buffer`, `liquidity_horizon_buffer`), each in shares. | must |
 | REQ-013 | `ReserveBufferConstraint` shall fold those components into its existing `max(...)` alongside today's `UtilizationPolicy` static buffers, so the binding buffer is the largest of all sources; absent a `DynamicBuffer`, its bound shall be byte-identical to today's. | must |
 | REQ-014 | The result shall report, per inventory record whose availability bound is non-zero, which buffer component bound it — so a desk can see *why* shares were reserved rather than only that they were. | must |
-| REQ-015 | The system shall provide golden tests proving: an expected-economics solve reallocates away from a route whose take-up probability is poor; the same request in `contractual` mode is unchanged; and a dynamic buffer larger than every static buffer binds. | must |
+| REQ-015 | The system shall provide golden tests proving: an `expected_direct` solve reallocates away from a route whose take-up probability is poor; the same request in default `expected_shadow` mode is unchanged; and a dynamic buffer larger than every static buffer binds. | must |
 
 ## Non-Functional Requirements
 
 | ID | Requirement | Target |
 | --- | --- | --- |
-| NFR-001 | Zero behavior change when nothing is supplied | Every existing test (326 passed pre-this-spec) continues to pass unchanged; a request with no `EntityRelationship`, `ExpectedEconomics`, or `DynamicBuffer`, under the default `contractual` mode, compiles to byte-identical variables, rows, bounds, and objective coefficients. |
-| NFR-002 | Attribution reconciles in expected mode | `reporting.attribution.attribute_objective` reconstructs the solver's objective without raising `AttributionMismatchError` in both modes — guaranteed structurally by REQ-007's single-formula rule, and pinned by a test. |
+| NFR-001 | Zero behavior change when nothing is supplied | Every existing test (326 passed pre-this-spec) continues to pass unchanged; a request with no `EntityRelationship`, `ExpectedEconomics`, or `DynamicBuffer`, under the default `expected_shadow` mode, compiles to byte-identical variables, rows, bounds, and objective coefficients. |
+| NFR-002 | Attribution reconciles in direct expected mode | `reporting.attribution.attribute_objective` reconstructs the solver's objective without raising `AttributionMismatchError` in both objective-driving modes — guaranteed structurally by REQ-007's single-formula rule, and pinned by a test. |
 | NFR-003 | The optimizer estimates nothing | No module under `src/inventory_optimizer` fits, trains, or infers a hazard/take-up/liquidity value; every such number enters as an input carrying its own model version and calibration date (§22.13). |
-| NFR-004 | G3 stays un-granted | `expected` mode is off by default, is reachable only by an explicit config change, and is disclosed in every result it produces. Nothing in this repo asserts that the G3 review has happened. |
+| NFR-004 | G3 stays un-granted | `expected_direct` mode is off by default, is reachable only by an explicit config change, and is disclosed in every result it produces. Nothing in this repo asserts that the G3 review has happened. Shadow mode is the default evidence surface, not a production promotion. |
 | NFR-005 | LP stays LP | Nothing in this spec introduces an integer, binary, or quadratic variable; `needs_mip`/`needs_qp` are untouched and a request using every feature here still compiles through `compile_lp`. |
 
 ## Acceptance Criteria
@@ -157,11 +160,11 @@ formulation change and an economics change in one review.
 | AC-002 | Given a `hard` parent-scoped limit and a borrower whose entity mapping is below the configured confidence threshold, when validated, then an `InputValidationError` names the borrower, the limit, and the confidence reason. | REQ-004 |
 | AC-003 | Given an entity relationship observed after the request's knowledge time, when the hierarchy is resolved, then that relationship is invisible — the same no-look-ahead guarantee `0011` established, inherited rather than reimplemented. | REQ-002 |
 | AC-004 | Given a route with `take_up_probability = 0.5` and `conditional_expected_days_active` equal to half the horizon, when the expected factor is computed, then `expected_active_fraction` is `0.25`, and a factor computed outside `[0, 1]` is clamped. | REQ-006 |
-| AC-005 | Given two otherwise identical routes differing only in take-up probability, when solved in `expected` mode, then allocation shifts to the higher-take-up route; given the same request in `contractual` mode, then allocation is unchanged from today's. | REQ-007, REQ-008, REQ-015 |
-| AC-006 | Given a request with expected-economics estimates under the default `contractual` mode, when solved, then allocations and the objective are byte-identical to the same request with no estimates at all, and the expected-revenue comparison is reported separately. | REQ-009, NFR-001 |
-| AC-007 | Given `expected` mode and a request where one route has no `ExpectedEconomics` record, when compiled, then it fails closed with a structured issue naming that route. | REQ-010 |
-| AC-008 | Given an `expected`-mode solve, when objective attribution runs, then it reconciles without raising `AttributionMismatchError`, and the reported per-component value equals the hand-computed expected revenue. | REQ-007, NFR-002 |
-| AC-009 | Given an `expected`-mode result, when inspected, then it names the mode and, per route, the model version and calibration date of each estimate used. | REQ-011, NFR-004 |
+| AC-005 | Given two otherwise identical routes differing only in take-up probability, when solved in `expected_direct` mode, then allocation shifts to the higher-take-up route; given the same request in default `expected_shadow` mode, then allocation is unchanged from today's and the expected comparison reports the direct-mode economic preference. | REQ-007, REQ-008, REQ-015 |
+| AC-006 | Given a request with expected-economics estimates under the default `expected_shadow` mode, when solved, then allocations and the objective are byte-identical to the same request with no estimates at all, and the expected-revenue comparison is reported separately. | REQ-009, NFR-001 |
+| AC-007 | Given `expected_direct` mode and a request where one route has no `ExpectedEconomics` record, when compiled, then it fails closed with a structured issue naming that route. | REQ-010 |
+| AC-008 | Given an `expected_direct`-mode solve, when objective attribution runs, then it reconciles without raising `AttributionMismatchError`, and the reported per-component value equals the hand-computed expected revenue. | REQ-007, NFR-002 |
+| AC-009 | Given an `expected_direct`-mode result, when inspected, then it names the mode and, per route, the model version and calibration date of each estimate used. | REQ-011, NFR-004 |
 | AC-010 | Given an inventory record whose `liquidity_horizon_buffer` exceeds every static `UtilizationPolicy` buffer, when solved, then availability is bound by that component and the result names it as the binding one; given no `DynamicBuffer`, then the bound is byte-identical to today's. | REQ-012, REQ-013, REQ-014 |
 | AC-011 | Given a request exercising entity aggregation, expected economics, and a dynamic buffer together, when compiled, then the problem is still an LP (no integer or quadratic variables) and `verification.passed` is true. | NFR-005 |
 | AC-012 | Given the full existing suite (326 passed), when run after this spec's changes with nothing supplied, then all still pass unchanged. | NFR-001 |
@@ -195,40 +198,39 @@ formulation change and an economics change in one review.
 
 | ID | Risk | Impact | Mitigation |
 | --- | --- | --- | --- |
-| RISK-001 | Expected economics changes what every reported dollar *means*. A reader comparing this quarter's optimizer output to last quarter's could attribute a modeling change to a book change. | Misread performance; a governance breach if expected numbers reach a desk as though they were contractual. | Off by default (REQ-008/NFR-004); every result names its mode (REQ-011); the default shadow mode (REQ-009) reports both side by side precisely so the difference is visible rather than substituted. |
+| RISK-001 | Expected economics changes what every reported dollar *means*. A reader comparing this quarter's optimizer output to last quarter's could attribute a modeling change to a book change. | Misread performance; a governance breach if expected numbers reach a desk as though they were contractual. | Direct expected-economics optimization is off by default (REQ-008/NFR-004); every result names its mode (REQ-011); the default shadow mode (REQ-009) reports both side by side precisely so the difference is visible rather than substituted. |
 | RISK-002 | Estimates arrive from an upstream that does not exist yet, so the feature cannot be exercised end to end against real data inside this repo — the same shape as `0011`'s synthetic-adapter limitation. | "Implemented" could be mistaken for "usable on the desk." | Stated in this spec's own Problem & Context and carried into `docs/handoff.md`; G3 remains explicitly un-granted (NFR-004); tests use hand-authored estimate fixtures with explicit fake model versions. |
 | RISK-003 | An entity hierarchy that silently mis-maps a borrower could aggregate exposure across the wrong parent, either over- or under-constraining a real credit limit. | A credit-limit breach is a control failure, not a modeling preference. | §22.9's fail-closed rule is implemented literally (REQ-004) rather than softened to a warning; AC-002 pins it; the confidence threshold is configurable, not hard-coded. |
 | RISK-004 | `expected_active_fraction` multiplies revenue but not transition cost, so a low-take-up route could look cheap to churn. | Subtly wrong trade-off between revenue and turnover. | `plan.md` must state which terms the factor applies to and which it deliberately does not; AC-008's hand-computed check is written against the intended formula, so a drift shows up as a test failure rather than a plausible number. |
-| RISK-005 | Bundling three §22 subsections in one spec makes for a large review. | Slower, lower-quality review; a defect hides in the volume. | The PWL piece is proposed for removal (Open Question 2); the three remaining pieces are independent (different files, different ACs) and sequenced as separate task groups so each can land and be reviewed on its own. |
+| RISK-005 | Bundling three §22 subsections in one spec makes for a large review. | Slower, lower-quality review; a defect hides in the volume. | The PWL piece is deferred by owner decision; the three remaining pieces are independent (different files, different ACs) and sequenced as separate task groups so each can land and be reviewed on its own. |
 
-## Assumptions & Open Questions
+## Decisions & Assumptions
 
-- **Open question 1 (the main one): shadow-mode default, or optimize on expected economics
-  directly?** This spec proposes shadow/compare as the default (REQ-009) with `expected` mode as an
-  explicit opt-in (REQ-008), because G3 — "Expected-economics model promotion," owned by quant
-  research + model risk + business — is precisely the approval for letting these numbers drive
-  allocation, and this repo cannot grant it. Confirm, or say you want `expected` mode to be the
-  intended destination sooner.
-- **Open question 2: defer T24's piecewise-linear unwind cost to its own spec?** Recommended.
-  It is the only piece requiring new formulation machinery (segment variables), a convexity
-  argument, and §14.3 breakpoint disclosure. The dynamic *buffer* half of T24 stays here, where it
-  is three lines inside an existing `max()`.
-- **Open question 3: confirm the fail-closed rule for entity mappings (REQ-004).** `0011`'s
+- **Resolved owner decision 1: support both shadow mode and direct expected-economics
+  optimization, with shadow mode as the default.** `expected_shadow` is the default: contractual
+  coefficients drive allocation and expected economics is reported beside the result. `expected_direct`
+  is an explicit opt-in mode: expected coefficients drive allocation and fail closed on missing
+  estimates. G3 — "Expected-economics model promotion," owned by quant research + model risk +
+  business — remains the approval for production use of `expected_direct`, and this repo cannot
+  grant it.
+- **Resolved owner decision 2: defer T24's piecewise-linear unwind cost to its own spec.** It is
+  the only piece requiring new formulation machinery (segment variables), a convexity argument, and
+  §14.3 breakpoint disclosure. The dynamic *buffer* half of T24 stays here, where it is three lines
+  inside an existing `max()`.
+- **Resolved owner decision 3: confirm the fail-closed rule for entity mappings (REQ-004).** `0011`'s
   status/calendar checks became warnings at your direction, because the data behind them was
   entirely synthetic. §22.9 states the opposite default for hard aggregation ("Low-confidence or
   conflicting mappings fail closed for hard aggregation"), and a credit limit is a control rather
-  than a disclosure — so this spec proposes fail-closed. Confirm the distinction is intended.
-- **Open question 4 (a documentation defect, not a design choice): the engine spec carries two
-  incompatible "R" numbering schemes, and `0011` mis-tagged rows because of it.**
+  than a disclosure.
+- **Resolved owner decision 4: accept the R-numbering documentation correction.** The engine spec
+  carries two incompatible "R" numbering schemes, and `0011` mis-tagged rows because of it.
   `01_SPEC.md` §25 defines realism releases R0-R3 (R0 = data correctness, R1 = expected economics).
   `ROADMAPS.md` §2 defines a *different* R0-R8 delivery roadmap (R0 = portable package, R1 =
   verified baseline LP, **R3 = production data and schedule realism, T20-T24**).
   `TRACEABILITY.md`'s release column uses **`ROADMAPS.md`'s** numbering — which is why `DAT-005`
   reads "T23-T25 / R3-R5 / G3" rather than "R1". In `0011` I retagged `DAT-001`-`DAT-004`/`DAT-006`
   from `R3` to `R0` on §25's numbering, which is wrong in that column's own convention. This spec's
-  T-013 restores those tags and adds a one-line note naming which scheme the column uses. Flagging
-  it rather than quietly fixing it, since it is my error and it changes what a reader thinks the
-  delivery sequence is.
+  T-013 restores those tags and adds a one-line note naming which scheme the column uses.
 - Assumption: `expected_active_fraction` multiplies the fee-revenue term only; the additive cost
   coefficients (manufactured payment, indemnification capital, settlement fail, relationship) enter
   as separate per-route linear costs. `plan.md` pins the exact formula (RISK-004).

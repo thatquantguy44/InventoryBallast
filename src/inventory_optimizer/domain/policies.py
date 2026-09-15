@@ -15,6 +15,8 @@ class CounterpartyLimit(BaseModel):
 
     limit_id: str
     borrower_id: str
+    legal_entity_id: str | None = None
+    ultimate_parent_id: str | None = None
     effective_from: AwareDatetime
     effective_to: AwareDatetime | None = None
     security_id: str | None = None
